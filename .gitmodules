@@ -1,0 +1,6 @@
+[submodule "third_party/Crow"]
+	path = third_party/Crow
+	url = https://github.com/CrowCpp/Crow.git
+[submodule "third_party/websocketpp"]
+	path = third_party/websocketpp
+	url = https://github.com/zaphoyd/websocketpp.git
