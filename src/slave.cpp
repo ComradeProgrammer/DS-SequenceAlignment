@@ -2,16 +2,26 @@
 #include <thread>
 
 #include "controller/slave_controller.h"
+#include "gflags/gflags.h"
 using namespace std;
-char datab[] = {1, 2, 3, 4};
-int main() {
+DEFINE_string(node_id, "", "id of the slave node");
+DEFINE_string(master_uri, "",
+              "uri of the master node's websocket endpoint, e.g. "
+              "ws://localhost:8000/websocket");
+DEFINE_string(backup_master_uri, "",
+              "uri of the backup master node's websocket endpoint, e.g. "
+              "ws://localhost:8001/websocket");
+
+int main(int argc, char **argv) {
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
     SlaveController controller;
-    controller.setID("slave1");
-    controller.setMasterUri("ws://localhost:8000/websocket");
-    controller.setBackupMasterUri("ws://localhost:8001/websocket");
+    controller.setID(FLAGS_node_id);
+    controller.setMasterUri(FLAGS_master_uri);
+    controller.setBackupMasterUri(FLAGS_backup_master_uri);
     controller.onInit();
-    controller.establishConnection();   
+    controller.establishConnection();
     // todo: remove test code
+    char datab[] = {1, 2, 3, 4};
     while (1) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         controller.getServiceObject()->sendMessageToPeer(MASTER_ID, "hello");
