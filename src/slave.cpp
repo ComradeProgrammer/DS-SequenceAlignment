@@ -21,12 +21,12 @@ int main(int argc, char **argv) {
     controller.onInit();
     controller.establishConnection();
     // todo: remove test code
-    char datab[] = {1, 2, 3, 4};
-    while (1) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        controller.getServiceObject()->sendMessageToPeer(MASTER_ID, "hello");
-        controller.getServiceObject()->sendMessageToPeer(BACKUP_MASTER_ID,
-                                                         datab, 4);
-    }
+    // char datab[] = {1, 2, 3, 4};
+    // while (1) {
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    //     controller.getServiceObject()->sendMessageToPeer(MASTER_ID, "hello");
+    //     controller.getServiceObject()->sendMessageToPeer(BACKUP_MASTER_ID,
+    //                                                      datab, 4);
+    // }
     return 0;
 }

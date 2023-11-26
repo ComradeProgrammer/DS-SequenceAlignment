@@ -127,6 +127,7 @@ void MasterController::sendMessageToPeer(const std::string& peer_id,
     connection->send_binary(string(data, len));
 }
 void MasterController::run(uint16_t listen_port) {
+    // todo: remove test codes
     // std::thread([this]() {
     //     while (1) {
     //         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
