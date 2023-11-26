@@ -4,15 +4,18 @@
 #include <functional>
 
 #include "crow/logging.h"
+#include "model/IdentificationInfo.hpp"
+#include "service/slave_service.h"
 #include "util/util.h"
+using std::make_shared;
 typedef websocketpp::client<websocketpp::config::asio_client> client;
 void SlaveController::establishConnection() {
     master_client_.set_access_channels(websocketpp::log::alevel::none);
     backup_master_client_.set_access_channels(websocketpp::log::alevel::none);
 
     if (master_uri_ != "") {
-        master_client_.init_asio();
         std::atomic_bool master_ready(false);
+        master_client_.init_asio();
         master_client_.set_open_handler(
             [&master_ready](websocketpp::connection_hdl hdl) {
                 CROW_LOG_INFO << "websocket connected with master";
@@ -26,10 +29,6 @@ void SlaveController::establishConnection() {
                       std::placeholders::_1, std::placeholders::_2));
         master_client_.set_close_handler(std::bind(
             &SlaveController::onMasterClose, this, std::placeholders::_1));
-        // wait for connection established
-        // while (!master_ready) {
-        //     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        // }
         websocketpp::lib::error_code ec;
         master_connection_ = master_client_.get_connection(master_uri_, ec);
 
@@ -48,13 +47,28 @@ void SlaveController::establishConnection() {
             }
         });
         t.detach();
+        // wait for connection established
+        while (!master_ready) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        // send the identification information
+        IdentificationInfo identity;
+        identity.is_backup_master_ = false;
+        identity.peer_id_ = id_;
+        std::string s = identity.toJson();
+        master_client_.send(master_connection_->get_handle(), s,
+                            websocketpp::frame::opcode::text);
+        service_->onConnectionEstablished(MASTER_ID);
     }
 
     if (backup_master_uri_ != "") {
+        std::atomic_bool backup_master_ready(false);
+
         backup_master_client_.init_asio();
         backup_master_client_.set_open_handler(
-            [](websocketpp::connection_hdl hdl) {
+            [&backup_master_ready](websocketpp::connection_hdl hdl) {
                 CROW_LOG_INFO << "websocket connected with backup_master";
+                backup_master_ready = true;
             });
         backup_master_client_.set_fail_handler(
             [](websocketpp::connection_hdl hdl) {
@@ -85,41 +99,62 @@ void SlaveController::establishConnection() {
             }
         });
         t.detach();
+        // wait for connection established
+        while (!backup_master_ready) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        IdentificationInfo identity;
+        identity.is_backup_master_ = false;
+        identity.peer_id_ = id_;
+        std::string s = identity.toJson();
+        backup_master_client_.send(backup_master_connection_->get_handle(), s,
+                                   websocketpp::frame::opcode::text);
+        service_->onConnectionEstablished(BACKUP_MASTER_ID);
     }
 }
 
+void SlaveController::onInit() {
+    service_ = make_shared<SlaveService>(this);
+    service_->onInit();
+}
 void SlaveController::onMasterMessage(
     websocketpp::connection_hdl hdl,
     websocketpp::config::asio_client::message_type::ptr msg) {
+    std::string payload = msg->get_payload();
     if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-        CROW_LOG_INFO << "received text message from master:"
-                      << msg->get_payload();
+        CROW_LOG_INFO << "received text message from master:" << payload;
+        service_->onNewMessage(MASTER_ID, payload, false);
     } else if (msg->get_opcode() == websocketpp::frame::opcode::binary) {
-        std::string payload = msg->get_payload();
         CROW_LOG_INFO << "received binary data message from master:"
                       << charArrayToString(payload.data(), payload.size());
+        service_->onNewMessage(MASTER_ID, payload, true);
     }
 }
 
 void SlaveController::onBackupMasterMessage(
     websocketpp::connection_hdl hdl,
     websocketpp::config::asio_client::message_type::ptr msg) {
+    std::string payload = msg->get_payload();
     if (msg->get_opcode() == websocketpp::frame::opcode::text) {
         CROW_LOG_INFO << "received text message from backup master:"
                       << msg->get_payload();
+        service_->onNewMessage(BACKUP_MASTER_ID, payload, false);
+
     } else if (msg->get_opcode() == websocketpp::frame::opcode::binary) {
-        std::string payload = msg->get_payload();
         CROW_LOG_INFO << "received binary data message from backup master:"
                       << charArrayToString(payload.data(), payload.size());
+        service_->onNewMessage(BACKUP_MASTER_ID, payload, true);
     }
 }
 
 void SlaveController::onMasterClose(websocketpp::connection_hdl hdl) {
     CROW_LOG_INFO << "connection closed with master";
+    service_->onConnectionTerminated(MASTER_ID);
 }
 
 void SlaveController::onBackupMasterClose(websocketpp::connection_hdl hdl) {
     CROW_LOG_INFO << "connection closed with backup master";
+    service_->onConnectionTerminated(BACKUP_MASTER_ID);
 }
 
 void SlaveController::sendMessageToPeer(const std::string& peer_id,

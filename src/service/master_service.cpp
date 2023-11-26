@@ -8,7 +8,7 @@ MasterService::MasterService(AbstractController* controller)
 }
 void MasterService::onInit() {}
 
-void MasterService::onNewMessage(std::string peer_id, std::string&& message,
+void MasterService::onNewMessage(std::string peer_id,const std::string& message,
                                  bool is_binary) {}
 
 void MasterService::onConnectionEstablished(const std::string peer_id) {}

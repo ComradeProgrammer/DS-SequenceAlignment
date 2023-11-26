@@ -1,5 +1,7 @@
 #include "service/abstract_service.h"
 
+#include <iostream>
+
 #include "controller/abstract_controller.h"
 
 void AbstractService::sendMessageToPeer(const std::string& peer_id,

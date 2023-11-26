@@ -2,14 +2,15 @@
 
 #include "model/IdentificationInfo.hpp"
 #include "nlohmann/json.hpp"
+#include "service/master_service.h"
 #include "util/util.h"
-
 using nlohmann::json;
 using std::bind;
 using std::lock_guard;
-using std::string;
+using std::make_shared;
+using std::move;
 using std::mutex;
-
+using std::string;
 void MasterController::onInit() {
     // create a websocket server
     CROW_WEBSOCKET_ROUTE(app_, "/websocket")
@@ -18,6 +19,9 @@ void MasterController::onInit() {
         .onmessage(bind(&MasterController::onMessage, this,
                         std::placeholders::_1, std::placeholders::_2,
                         std::placeholders::_3));
+    // create service object
+    service_ = make_shared<MasterService>(this);
+    service_->onInit();
 }
 
 void MasterController::onOpen(crow::websocket::connection& conn) {
@@ -28,17 +32,19 @@ void MasterController::onOpen(crow::websocket::connection& conn) {
 void MasterController::onClose(crow::websocket::connection& conn) {
     // check whether this connection has IdentificationInfo attached
     if (conn.userdata() == nullptr) {
-        CROW_LOG_INFO << "new websocket connection from "
+        CROW_LOG_INFO << "new websocket disconnected from "
                       << conn.get_remote_ip();
     } else {
         auto tmp = static_cast<IdentificationInfo*>(conn.userdata());
         conn.userdata(nullptr);
-        CROW_LOG_INFO << "new websocket connection from " << tmp->getPeerID()
+        CROW_LOG_INFO << "new websocket disconnected from " << tmp->getPeerID()
                       << " " << conn.get_remote_ip();
 
         lock_.lock();
         id_to_connections.erase(tmp->getPeerID());
         lock_.unlock();
+        // then inform this to the service layer
+        service_->onConnectionTerminated(tmp->getPeerID());
         delete tmp;
     }
 }
@@ -57,7 +63,8 @@ void MasterController::onMessage(crow::websocket::connection& conn,
         }
         if (parse_ok && j.contains("type") &&
             j["type"].template get<string>() == "IdentificationInfo") {
-            lock_guard<mutex>block_lock(lock_);
+            // if this is an  IdentificationInfo json object
+            lock_guard<mutex> block_lock(lock_);
             // store client's info in the connection's user data
             IdentificationInfo* user_info = new IdentificationInfo();
             user_info->loadFromJsonObject(j);
@@ -67,13 +74,33 @@ void MasterController::onMessage(crow::websocket::connection& conn,
                                  ? BACKUP_MASTER_ID
                                  : user_info->getPeerID();
             id_to_connections[user_id] = &conn;
+            // inform this event to the service layer
+            service_->onConnectionEstablished(user_id);
             return;
+        }
+        // if it is just some other kind of messages
+        // try to get its user_id first
+        // and forward this message to the service layer
+
+        auto tmp = static_cast<IdentificationInfo*>(conn.userdata());
+        if (tmp != nullptr) {
+            service_->onNewMessage(tmp->getPeerID(), data, false);
+        } else {
+            CROW_LOG_WARNING
+                << "some connection without identification is sending message";
         }
     } else {
         CROW_LOG_INFO << "new data message "
                       << charArrayToString(data.c_str(), data.size());
+        auto tmp = static_cast<IdentificationInfo*>(conn.userdata());
+        // forward this message to the service layer
+        if (tmp != nullptr) {
+            service_->onNewMessage(tmp->getPeerID(), data, true);
+        } else {
+            CROW_LOG_WARNING
+                << "some connection without identification is sending message";
+        }
     }
-    // forward this message to the service layer
 }
 
 void MasterController::sendMessageToPeer(const std::string& peer_id,
@@ -100,11 +127,21 @@ void MasterController::sendMessageToPeer(const std::string& peer_id,
     connection->send_binary(string(data, len));
 }
 void MasterController::run(uint16_t listen_port) {
-    std::thread([this]() {
-        std::lock_guard<mutex>block_lock(lock_);
-        for (auto p : id_to_connections) {
-            sendMessageToPeer(p.first, "response");
-        }
-    }).detach();
+    // std::thread([this]() {
+    //     while (1) {
+    //         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    //         // todo: remove test code
+    //         std::unordered_map<std::string, crow::websocket::connection*> tmp;
+    //         {
+    //             std::lock_guard<mutex> block_lock(lock_);
+    //             tmp = id_to_connections;
+    //         }
+    //         for (auto p : tmp) {
+    //             CROW_LOG_INFO << "send to " << p.first;
+    //             sendMessageToPeer(p.first, "response");
+    //         }
+    //     }
+    // }).detach();
     app_.port(listen_port).multithreaded().run();
 }

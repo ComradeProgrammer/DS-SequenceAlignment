@@ -7,7 +7,7 @@ class AbstractService {
    public:
     AbstractService(AbstractController* controller) : controller_(controller){};
     virtual void onInit()=0;
-    virtual void onNewMessage(std::string peer_id, std::string&& message,
+    virtual void onNewMessage(std::string peer_id, const std::string& message,
                               bool is_binary) = 0;
     virtual void onConnectionEstablished(const std::string peer_id) = 0;
     virtual void onConnectionTerminated(const std::string peer_id) = 0;

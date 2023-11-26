@@ -2,7 +2,7 @@
 
 void SlaveService::onInit() {}
 
-void SlaveService::onNewMessage(std::string peer_id, std::string&& message,
+void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
                                 bool is_binary) {}
 
 void SlaveService::onConnectionEstablished(const std::string peer_id) {}

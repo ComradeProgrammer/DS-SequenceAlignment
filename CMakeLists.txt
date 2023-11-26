@@ -18,7 +18,7 @@ file(GLOB SOURCES "src/service/*.cpp" "src/controller/*.cpp" "src/model/*.cpp" "
 
 add_executable(master ${SOURCES} src/master.cpp)
 add_executable(slave ${SOURCES} src/slave.cpp)
-# add_executable(bmaster ${SOURCES} src/backup_master.cpp)
+add_executable(bmaster ${SOURCES} src/bmaster.cpp)
 
 
 
