@@ -14,6 +14,10 @@ class ScoreMatrixTask : public AbstratJsonObject {
         j["y"] = y_;
         j["sequenceRow"] = sequence_row_;
         j["sequenceColumn"] = sequence_column_;
+        j["matchScore"] = match_score_;
+        j["mismatchPenalty"] = mismatch_pentalty_;
+        j["gapExtra"] = gap_extra_;
+        j["gapOpen"] = gap_open_;
         return j.dump();
     }
     virtual void loadFromJsonObject(const nlohmann::json& j) {
@@ -24,6 +28,10 @@ class ScoreMatrixTask : public AbstratJsonObject {
         y_ = j["y"].template get<int>();
         sequence_row_ = j["sequenceRow"].template get<std::string>();
         sequence_column_ = j["sequenceColumn"].template get<std::string>();
+        match_score_ = j["matchScore"].template get<int>();
+        mismatch_pentalty_ = j["mismatchPenalty"].template get<int>();
+        gap_extra_ = j["gapExtra"].template get<int>();
+        gap_open_ = j["gapOpen"].template get<int>();
     }
 
    public:
@@ -34,6 +42,11 @@ class ScoreMatrixTask : public AbstratJsonObject {
     int y_;
     std::string sequence_row_;
     std::string sequence_column_;
+
+    int match_score_;
+    int mismatch_pentalty_;
+    int gap_extra_;
+    int gap_open_;
 };
 
 #endif

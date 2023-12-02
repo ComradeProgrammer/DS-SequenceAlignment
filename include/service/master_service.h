@@ -9,6 +9,13 @@ class MasterService : public AbstractService {
                               bool is_binary)override;
     virtual void onConnectionEstablished(const std::string peer_id)override;
     virtual void onConnectionTerminated(const std::string peer_id)override;
+
+    private:
+    std::string sequence_row_;
+    std::string sequence_column_;
+
+    
+    
 };
 
 #endif
