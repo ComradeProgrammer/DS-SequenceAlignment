@@ -12,6 +12,8 @@ For json serialization, we use nlohmann::json. The repo (and official guide) is 
 
 For command line argument parsing, we use google gflag. The repo is https://github.com/gflags/gflags
 
+For unittest, we use googletest. The repo is https://github.com/google/googletest and the official doc is https://google.github.io/googletest/
+
 
 ## Installation guide 
 ### 1. Preparation
@@ -59,5 +61,10 @@ Just run
 `./build/bmaster --port=8001 --master_uri=ws://localhost:8000/websocket`
 ` ./build/slave --master_uri=ws://localhost:8000/websocket --backup_master_uri=ws://localhost:8001/websocket --node_id=slave1` 
 to start them
+
+## 5. Unittest
+Use`./build/unittest` to run unittests.
+
+*You can also use `ctest --test-dir build`. We also support ctest in CMakeList.txt, but this is not recommended since you cannot see actual details of unit tests*
 
 
