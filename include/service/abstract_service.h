@@ -6,6 +6,7 @@ class AbstractController;
 class AbstractService {
    public:
     AbstractService(AbstractController* controller) : controller_(controller){};
+    virtual ~AbstractService() = default;
 
     /// @brief This function will be called during initializaion. You can do
     /// some init work in this function.
