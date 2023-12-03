@@ -154,4 +154,66 @@ TEST_F(TestMasterService, TestOnNewMessage) {
     ASSERT_EQ(service->task_queue_.size(), 1);
     ASSERT_EQ(service->task_queue_[0]->x_, 1);
     ASSERT_EQ(service->task_queue_[0]->y_, 0);
+    delete service;
+    delete controller;
+}
+
+TEST_F(TestMasterService, TestScoreMatrixDistribution) {
+    auto customized_controller = new CustomizedController();
+    atomic<int> counter = 0;
+    controller = customized_controller;
+    service = new MasterService(controller);
+    customized_controller->send_message_to_peer_text_ =
+        [&counter, this](string peer_id, string message) {
+            json j = json::parse(message);
+            // check the type
+            ASSERT_EQ(j["type"].template get<string>(), "ScoreMatrixTask");
+            // deseralize
+            ScoreMatrixTask assign;
+            assign.loadFromJsonObject(j);
+            // sleep for a while, simulating the calculation process
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(100 + rand() % 100));
+            auto resp = make_shared<ScoreMatrixTaskResponse>();
+            resp->bottom_row_ = {1, 2};
+            resp->right_column_ = {3, 4};
+            resp->x_ = assign.x_;
+            resp->y_ = assign.y_;
+            resp->max_score_ = 100;
+            resp->max_score_x_ = 1;
+            resp->max_score_y_ = 0;
+            string json_message = resp->toJson();
+            service->onNewMessage(peer_id, json_message, false);
+            counter++;
+            
+        };
+
+    // insert some fake results so that as if we have finished some blocks
+    initialize1();
+    // call the onInit method
+    service->onInit();
+    service->onConnectionEstablished("slave1");
+    std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 1000));
+    service->onConnectionEstablished("slave2");
+    // wait for all tasks to be assigned
+    while (counter != 16) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    // check whether all tasks have results
+    ASSERT_EQ(service->task_blocks_.size(), 4);
+    ASSERT_EQ(service->task_blocks_[0].size(), 4);
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            ASSERT_NE(service->task_blocks_[i][j], nullptr);
+        }
+    }
+
+    // check no running tasks for node or in queue
+    ASSERT_EQ(service->current_tasks.size(), 2);
+    ASSERT_EQ(service->current_tasks["slave1"], nullptr);
+    ASSERT_EQ(service->current_tasks["slave2"], nullptr);
+    ASSERT_TRUE(service->task_queue_.empty());
+
+    delete service;
+    delete controller;
 }
