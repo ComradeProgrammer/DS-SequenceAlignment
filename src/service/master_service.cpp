@@ -16,8 +16,8 @@ void MasterService::onInit() {
     // todo: read the parameters  from somewhere and set them
 
     // calculate how many rows and columns of block and init the tasks_blocks
-    int sequence_row_length = sequence_row_.size();
-    int sequence_column_length = sequence_column_.size();
+    int sequence_row_length = sequence_column_.size();
+    int sequence_column_length = sequence_row_.size();
 
     int row_num = (sequence_row_length % row_block_size_) == 0
                       ? (sequence_row_length / row_block_size_)
@@ -52,15 +52,17 @@ void MasterService::onNewMessage(std::string peer_id,
     string object_type = j["type"].template get<string>();
     lock_guard<mutex> lock_block(lock_);
     if (object_type == "ScoreMatrixTaskResponse") {
-        onScoreMatrixTaskResponse(peer_id, j);
+        auto response = make_shared<ScoreMatrixTaskResponse>();
+        response->loadFromJsonObject(j);
+        onScoreMatrixTaskResponse(peer_id, response);
     } else if (object_type == "TracebackTaskResponse") {
-        onTracebackTaskResponse(peer_id, j);
+        auto response = make_shared<TracebackTaskResponse>();
+        response->loadFromJsonObject(j);
+        onTracebackTaskResponse(peer_id, response);
     }
 }
-void MasterService::onScoreMatrixTaskResponse(string peer_id,
-                                              nlohmann::json& j) {
-    auto response = make_shared<ScoreMatrixTaskResponse>();
-    response->loadFromJsonObject(j);
+void MasterService::onScoreMatrixTaskResponse(
+    string peer_id, shared_ptr<ScoreMatrixTaskResponse> response) {
     int x = response->x_;
     int y = response->y_;
     // record the best score
@@ -82,8 +84,8 @@ void MasterService::onScoreMatrixTaskResponse(string peer_id,
 
     score_matrix_task_blocks_[x][y] = response;
 
-    if (x == score_matrix_task_blocks_.size()-1 &&
-        y == score_matrix_task_blocks_[0].size()-1) {
+    if (x == score_matrix_task_blocks_.size() - 1 &&
+        y == score_matrix_task_blocks_[0].size() - 1) {
         // all the blocks have been calculated
         // starting the first traceback task
         auto new_task = genearteTracebackTask(max_score_x_, max_score_y_);
@@ -108,19 +110,18 @@ void MasterService::onScoreMatrixTaskResponse(string peer_id,
 
     assignTasks();
 }
-void MasterService::onTracebackTaskResponse(string peer_id, nlohmann::json& j) {
-    auto response = make_shared<TracebackTaskResponse>();
-    response->loadFromJsonObject(j);
+void MasterService::onTracebackTaskResponse(
+    string peer_id, shared_ptr<TracebackTaskResponse> response) {
     result_ = response->sequence_ + result_;
+    int next_step_x = response->x_ * row_block_size_ + response->end_x_;
+    int next_step_y = response->y_ * column_block_size_ + response->end_y_;
     // check whether trace back should stop
-    if (response->x_ != -1 && response->y_ != -1) {
+    if (response->halt_ || !(next_step_x >= 0 && next_step_y >= 0)) {
         // weh should stop now. we got the result
         cout << "Result got" << endl;
         cout << result_ << endl;
         return;
     }
-    int next_step_x = response->x_ * row_block_size_ + response->end_x_;
-    int next_step_y = response->y_ * column_block_size_ + response->end_y_;
 
     auto new_task = genearteTracebackTask(next_step_x, next_step_y);
     task_queue_.push_back(new_task);
@@ -149,28 +150,35 @@ shared_ptr<ScoreMatrixTask> MasterService::generateScoreMatrixTask(int x,
     task->y_ = y;
     task->match_score_ = match_score_;
     task->mismatch_pentalty_ = mismatch_pentalty_;
-    task->gap_extra_ = gap_extra_;
+    // task->gap_extra_ = gap_extra_;
     task->gap_open_ = gap_open_;
     // get the sequence
-    task->sequence_row_ = sequence_row_.substr(
-        x * row_block_size_,
-        min(sequence_row_.size(), size_t((x + 1) * row_block_size_)));
+    task->sequence_row_ =
+        sequence_row_.substr(y * column_block_size_,
+                             min(sequence_row_.size() - y * column_block_size_,
+                                 size_t(column_block_size_)));
 
     task->sequence_column_ = sequence_column_.substr(
-        x * column_block_size_,
-        min(sequence_column_.size(), size_t((x + 1) * column_block_size_)));
+        x * row_block_size_, min(sequence_column_.size() - x * row_block_size_,
+                                 size_t(row_block_size_)));
     // get the column on the top
     if (x != 0) {
         task->top_row_ = score_matrix_task_blocks_[x - 1][y]->bottom_row_;
+    } else {
+        task->top_row_ = vector<int>(task->sequence_row_.size(), 0);
     }
     // get the row on its left
     if (y != 0) {
         task->left_column_ = score_matrix_task_blocks_[x][y - 1]->right_column_;
+    } else {
+        task->left_column_ = vector<int>(task->sequence_column_.size(), 0);
     }
     // get the number on its left-top
     if (x != 0 && y != 0) {
         task->left_top_element_ =
             *(score_matrix_task_blocks_[x - 1][y - 1]->bottom_row_.end() - 1);
+    } else {
+        task->left_top_element_ = 0;
     }
     return task;
 }

@@ -18,7 +18,7 @@ class MasterService : public AbstractService {
     virtual void onConnectionEstablished(const std::string peer_id) override;
     virtual void onConnectionTerminated(const std::string peer_id) override;
 
-   private:
+   protected:
     std::string sequence_row_;
     std::string sequence_column_;
 
@@ -27,7 +27,7 @@ class MasterService : public AbstractService {
     // parameters for the sw algorithm
     int match_score_;
     int mismatch_pentalty_;
-    int gap_extra_;
+    // int gap_extra_;
     int gap_open_;
 
     // records where the max score show up
@@ -60,9 +60,11 @@ class MasterService : public AbstractService {
 
     std::mutex lock_;
 
-   private:
-    void onScoreMatrixTaskResponse(std::string peer_id,nlohmann::json& j);
-    void onTracebackTaskResponse(std::string peer_id,nlohmann::json& j);
+   protected:
+    void onScoreMatrixTaskResponse(
+        std::string peer_id, std::shared_ptr<ScoreMatrixTaskResponse> response);
+    void onTracebackTaskResponse(
+        std::string peer_id, std::shared_ptr<TracebackTaskResponse> response);
 
     // generateTask construct a task object
     // and fill in fixed parameters
@@ -78,16 +80,16 @@ class MasterService : public AbstractService {
     // and try to assign some tasks for them
     // and use multiple threads to send them
     // lock needs to be aquired before calling this function
-    void assignTasks();
+    virtual void assignTasks();
 
     // assignTaskToNode assign a task to specified node if there is any
     // lock needs to be aquired before calling this function
-    void sendTaskToNode(std::string peer_id,
-                        std::shared_ptr<AbstractTask> task);
+    virtual void sendTaskToNode(std::string peer_id,
+                                std::shared_ptr<AbstractTask> task);
 
-    //
-    std::shared_ptr<TracebackTask> genearteTracebackTask(int prev_x,
-                                                         int prev_y);
+    // genearteTracebackTask generate a traceback task for a specified point
+    virtual std::shared_ptr<TracebackTask> genearteTracebackTask(int prev_x,
+                                                                 int prev_y);
 };
 
 #endif
