@@ -29,10 +29,25 @@ void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
     }
 }
 
-void SlaveService::onConnectionEstablished(const std::string peer_id) {}
+void SlaveService::onConnectionEstablished(const std::string peer_id) {
+    CROW_LOG_INFO << "connection established with " << peer_id;
+    lock_guard<mutex> lock_block(lock_);
+    if (peer_id == MASTER_ID) {
+        master_online_ = true;
+    } else if (peer_id == BACKUP_MASTER_ID) {
+        backup_master_online_ = true;
+    }
+}
 
 void SlaveService::onConnectionTerminated(const std::string peer_id) {
-    // todo: implement
+    CROW_LOG_INFO << "connection terminated with " << peer_id;
+
+    lock_guard<mutex> lock_block(lock_);
+    if (peer_id == MASTER_ID) {
+        master_online_ = false;
+    } else if (peer_id == BACKUP_MASTER_ID) {
+        backup_master_online_ = false;
+    }
 }
 
 shared_ptr<ScoreMatrixTaskResponse> SlaveService::onScoreMatrixTask(
@@ -76,7 +91,19 @@ shared_ptr<TracebackTaskResponse> SlaveService::onTracebackTask(
     return response;
 }
 
-void SlaveService::sendResultBack(std::shared_ptr<AbstractJsonObject> obj) {}
+void SlaveService::sendResultBack(std::shared_ptr<AbstractJsonObject> obj) {
+    std::string message = obj->toJson();
+    if (master_online_) {
+        thread([message, this]() {
+            sendMessageToPeer(MASTER_ID, message);
+        }).detach();
+    }
+    if (backup_master_online_) {
+        thread([message, this]() {
+            sendMessageToPeer(BACKUP_MASTER_ID, message);
+        }).detach();
+    }
+}
 
 shared_ptr<ScoreMatrixBlock> SlaveService::calculateScoreMatrixBlock(
     shared_ptr<ScoreMatrixTask> task) {
