@@ -17,7 +17,7 @@ class ScoreMatrixTask : public AbstractTask {
         j["sequenceColumn"] = sequence_column_;
         j["matchScore"] = match_score_;
         j["mismatchPenalty"] = mismatch_pentalty_;
-        j["gapExtra"] = gap_extra_;
+        //j["gapExtra"] = gap_extra_;
         j["gapOpen"] = gap_open_;
         return j.dump();
     }
@@ -31,7 +31,7 @@ class ScoreMatrixTask : public AbstractTask {
         sequence_column_ = j["sequenceColumn"].template get<std::string>();
         match_score_ = j["matchScore"].template get<int>();
         mismatch_pentalty_ = j["mismatchPenalty"].template get<int>();
-        gap_extra_ = j["gapExtra"].template get<int>();
+        //gap_extra_ = j["gapExtra"].template get<int>();
         gap_open_ = j["gapOpen"].template get<int>();
     }
     virtual std::string getShortName() override {
@@ -50,7 +50,7 @@ class ScoreMatrixTask : public AbstractTask {
 
     int match_score_;
     int mismatch_pentalty_;
-    int gap_extra_;
+    //int gap_extra_;
     int gap_open_;
 };
 
