@@ -22,6 +22,7 @@ void MasterController::onInit() {
     // create service object
     service_ = make_shared<MasterService>(this);
     service_->onInit();
+
 }
 
 void MasterController::onOpen(crow::websocket::connection& conn) {

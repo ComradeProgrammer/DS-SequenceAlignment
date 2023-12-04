@@ -10,6 +10,7 @@
 #include "model/TracebackTask.hpp"
 #include "model/TracebackTaskResponse.hpp"
 #include "service/abstract_service.h"
+#include "controller/abstract_controller.h"
 class SlaveService : public AbstractService {
    public:
     SlaveService(AbstractController* controller)
@@ -25,6 +26,8 @@ class SlaveService : public AbstractService {
     std::mutex lock_;
     std::unordered_map<std::string, std::shared_ptr<ScoreMatrixBlock>>
         score_matrix_blocks_;
+    bool master_online_;
+    bool backup_master_online_;
 
    private:
     std::shared_ptr<ScoreMatrixTaskResponse> onScoreMatrixTask(

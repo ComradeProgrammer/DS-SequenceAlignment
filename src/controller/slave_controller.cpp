@@ -60,7 +60,6 @@ void SlaveController::establishConnection() {
                             websocketpp::frame::opcode::text);
         service_->onConnectionEstablished(MASTER_ID);
     }
-
     if (backup_master_uri_ != "") {
         std::atomic_bool backup_master_ready(false);
 
@@ -159,6 +158,7 @@ void SlaveController::onBackupMasterClose(websocketpp::connection_hdl hdl) {
 
 void SlaveController::sendMessageToPeer(const std::string& peer_id,
                                         const std::string& message) {
+    CROW_LOG_INFO << "send message to " << peer_id << ": " << message;
     try {
         if (peer_id == MASTER_ID) {
             master_client_.send(master_connection_->get_handle(), message,

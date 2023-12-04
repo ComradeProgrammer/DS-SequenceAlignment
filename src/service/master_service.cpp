@@ -11,9 +11,14 @@ MasterService::MasterService(AbstractController* controller)
     // constructor
 }
 void MasterService::onInit() {
-    lock_guard<mutex> lock_block(lock_);
-
     // todo: read the parameters  from somewhere and set them
+    column_block_size_ = 2;
+    row_block_size_ = 3;
+    sequence_row_ = "ACACACTA";
+    sequence_column_ = "AGCACACA";
+    match_score_ = 2;
+    mismatch_pentalty_ = -1;
+    gap_open_ = -1;
 
     // calculate how many rows and columns of block and init the tasks_blocks
     int sequence_row_length = sequence_column_.size();
@@ -36,6 +41,12 @@ void MasterService::onInit() {
     auto task = generateScoreMatrixTask(0, 0);
     task_queue_.push_back(task);
     CROW_LOG_INFO << "add task 0,0 into queue";
+    lock_.lock();
+    // wait for 10 s
+    thread([this]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+        lock_.unlock();
+    }).detach();
 }
 
 void MasterService::onNewMessage(std::string peer_id,
@@ -122,15 +133,18 @@ void MasterService::onTracebackTaskResponse(
         cout << result_ << endl;
         return;
     }
+    // clear the task of peer
+    current_tasks[peer_id] = nullptr;
 
     auto new_task = genearteTracebackTask(next_step_x, next_step_y);
     task_queue_.push_back(new_task);
+
     // trigger resending tasks
     assignTasks();
 }
 void MasterService::onConnectionEstablished(const std::string peer_id) {
-    CROW_LOG_INFO << "peer " << peer_id << "connected";
     lock_guard<mutex> lock_block(lock_);
+    CROW_LOG_INFO << "peer " << peer_id << "connected";
     if (peer_id != BACKUP_MASTER_ID) {
         score_matrix_history_tasks_[peer_id] = {};
         current_tasks[peer_id] = nullptr;
@@ -264,6 +278,9 @@ void MasterService::assignTasks() {
                 // next time
                 task_queue_.pop_front();
                 sendTaskToNode(peer_id, task);
+            } else {
+                CROW_LOG_WARNING << peer_id
+                                 << " is working, schdeuling canceled";
             }
 
             return;
