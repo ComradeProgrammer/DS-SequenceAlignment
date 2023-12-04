@@ -6,7 +6,7 @@ using namespace std;
 #define SW_TOP 2
 #define SW_LEFTTOP 3
 
-string sequentialSmithWaterman(
+pair<int,string> sequentialSmithWaterman(
     string row, string column, int match_score, int mismatch_pentalty, int gap,
     vector<vector<pair<int, int>>>& score_matrix ) {
   // calculate the score matrix
@@ -70,5 +70,5 @@ string sequentialSmithWaterman(
   reverse(res.begin(), res.end());
   string seq;
   seq.insert(seq.begin(), res.begin(), res.end());
-  return seq;
+  return {max_score,seq};
 }
