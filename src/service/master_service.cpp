@@ -12,13 +12,14 @@ MasterService::MasterService(AbstractController* controller)
 }
 void MasterService::onInit() {
     // todo: read the parameters  from somewhere and set them
-    column_block_size_ = 2;
-    row_block_size_ = 3;
-    sequence_row_ = "ACACACTA";
-    sequence_column_ = "AGCACACA";
-    match_score_ = 2;
-    mismatch_pentalty_ = -1;
-    gap_open_ = -1;
+
+    // column_block_size_ = 2;
+    // row_block_size_ = 3;
+    // sequence_row_ = "ACACACTA";
+    // sequence_column_ = "AGCACACA";
+    // match_score_ = 2;
+    // mismatch_pentalty_ = -1;
+    // gap_open_ = -1;
 
     // calculate how many rows and columns of block and init the tasks_blocks
     int sequence_row_length = sequence_column_.size();
@@ -41,12 +42,12 @@ void MasterService::onInit() {
     auto task = generateScoreMatrixTask(0, 0);
     task_queue_.push_back(task);
     CROW_LOG_INFO << "add task 0,0 into queue";
-    lock_.lock();
     // wait for 10 s
-    thread([this]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-        lock_.unlock();
-    }).detach();
+    // lock_.lock();
+    // thread([this]() {
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+    //     lock_.unlock();
+    // }).detach();
 }
 
 void MasterService::onNewMessage(std::string peer_id,
