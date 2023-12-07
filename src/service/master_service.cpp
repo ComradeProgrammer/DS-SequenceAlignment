@@ -3,6 +3,7 @@
 #include "controller/abstract_controller.h"
 #include "crow.h"
 #include "service/master_service.h"
+#include "util/util.h"
 using namespace std;
 using nlohmann::json;
 
@@ -13,13 +14,27 @@ MasterService::MasterService(AbstractController* controller)
 void MasterService::onInit() {
     // todo: read the parameters  from somewhere and set them
 
-    // column_block_size_ = 2;
-    // row_block_size_ = 3;
-    // sequence_row_ = "ACACACTA";
-    // sequence_column_ = "AGCACACA";
-    // match_score_ = 2;
-    // mismatch_pentalty_ = -1;
-    // gap_open_ = -1;
+    if (config_ != nullptr) {
+        column_block_size_ = config_->column_block_size_;
+        row_block_size_ = config_->row_block_size_;
+        match_score_ = config_->match_score_;
+        mismatch_pentalty_ = config_->mismatch_penalty_;
+        gap_open_ = config_->gap_open_;
+        init_wait_ = config_->master_wait_time;
+        getSequence(config_->sequence_row_type_,
+                    config_->sequence_row_data_source_, sequence_row_);
+        getSequence(config_->sequence_column_type_,
+                    config_->sequence_column_data_source_, sequence_column_);
+        // Print the current config param for good
+        CROW_LOG_INFO << "column_block_size: " << column_block_size_;
+        CROW_LOG_INFO << "row_block_size: " << row_block_size_;
+        CROW_LOG_INFO << "match_score: " << match_score_;
+        CROW_LOG_INFO << "mismatch_pentalty: " << mismatch_pentalty_;
+        CROW_LOG_INFO << "gap_open: " << gap_open_;
+        CROW_LOG_INFO << "init_wait: " << init_wait_;
+        CROW_LOG_INFO << "sequence_row: " << sequence_row_;
+        CROW_LOG_INFO << "sequence_column: " << sequence_column_;
+    }
 
     // calculate how many rows and columns of block and init the tasks_blocks
     int sequence_row_length = sequence_column_.size();
@@ -42,12 +57,13 @@ void MasterService::onInit() {
     auto task = generateScoreMatrixTask(0, 0);
     task_queue_.push_back(task);
     CROW_LOG_INFO << "add task 0,0 into queue";
-    // wait for 10 s
-    // lock_.lock();
-    // thread([this]() {
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-    //     lock_.unlock();
-    // }).detach();
+    // wait for a period of time
+    lock_.lock();
+    thread([this]() {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(1000 * init_wait_));
+        lock_.unlock();
+    }).detach();
 }
 
 void MasterService::onNewMessage(std::string peer_id,
@@ -306,4 +322,24 @@ shared_ptr<TracebackTask> MasterService::genearteTracebackTask(int prev_pos_x,
     task->start_x_ = prev_pos_x % row_block_size_;
     task->start_y_ = prev_pos_y % column_block_size_;
     return task;
+}
+void MasterService::getSequence(string data_type, string data_source,
+                                string& out_res) {
+    if (data_type == "string") {
+        out_res = data_source;
+    } else if (data_type == "text") {
+        // read the text string
+        stringstream ss;
+        ifstream f(data_source, ios::in);
+        ss << f.rdbuf();
+        out_res = ss.str();
+        if (f.is_open()) {
+            CROW_LOG_ERROR << "failed to read file " << data_source;
+        }
+        // remove the space
+        out_res.erase(0, out_res.find_first_not_of(" \r\n\t\v\f"));
+        out_res.erase(out_res.find_last_not_of(" \r\n\t\v\f") + 1);
+    } else {
+        readFastaFile(data_source, out_res);
+    }
 }

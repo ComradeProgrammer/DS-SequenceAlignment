@@ -34,3 +34,5 @@
 # Customized lines
 build/
 .vscode/
+test.fasta
+test.txt

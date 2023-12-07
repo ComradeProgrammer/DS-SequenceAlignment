@@ -3,6 +3,7 @@
 #include <deque>
 #include <memory>
 
+#include "config/configuration.h"
 #include "model/ScoreMatrixTask.hpp"
 #include "model/ScoreMatrixTaskResponse.hpp"
 #include "model/TracebackTask.hpp"
@@ -17,8 +18,13 @@ class MasterService : public AbstractService {
                               bool is_binary) override;
     virtual void onConnectionEstablished(const std::string peer_id) override;
     virtual void onConnectionTerminated(const std::string peer_id) override;
+    inline void setConfiguration(std::shared_ptr<Configuration> config) {
+        config_ = config;
+    }
 
    protected:
+    std::shared_ptr<Configuration> config_;
+
     std::string sequence_row_;
     std::string sequence_column_;
 
@@ -34,6 +40,8 @@ class MasterService : public AbstractService {
     int max_score_ = 0;
     int max_score_x_;
     int max_score_y_;
+
+    int init_wait_ = 0;
 
     // records the best aligned sequence
     std::string result_;
@@ -90,6 +98,9 @@ class MasterService : public AbstractService {
     // genearteTracebackTask generate a traceback task for a specified point
     virtual std::shared_ptr<TracebackTask> genearteTracebackTask(int prev_x,
                                                                  int prev_y);
+
+    void getSequence(std::string data_type, std::string data_source,
+                            std::string& out_res);
 };
 
 #endif

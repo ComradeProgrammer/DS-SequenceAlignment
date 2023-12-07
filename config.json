@@ -1,0 +1,12 @@
+{
+    "masterWaitTime": 10,
+    "columnBlockSize": 4,
+    "rowBlockSize": 4,
+    "sequenceRowType": "fasta",
+    "sequenceRowDataSource": "test.fasta",
+    "sequenceColumnType": "text",
+    "sequenceColumnDataSource": "test.txt",
+    "matchScore": 2,
+    "mismatchPenalty": -1,
+    "gapOpen": -1
+}

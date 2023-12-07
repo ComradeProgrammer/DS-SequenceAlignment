@@ -5,6 +5,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "config/configuration.h"
 #include "controller/abstract_controller.h"
 #include "crow.h"
 #include "service/abstract_service.h"
@@ -13,7 +14,7 @@ class MasterController : public AbstractController {
    public:
     MasterController() = default;
     virtual ~MasterController() = default;
-    void onInit();
+    void onInit(std::shared_ptr<Configuration> config);
     void onOpen(crow::websocket::connection &conn);
     void onClose(crow::websocket::connection &conn);
     void onMessage(crow::websocket::connection &conn, const std::string &data,
