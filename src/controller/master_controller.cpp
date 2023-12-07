@@ -34,13 +34,11 @@ void MasterController::onOpen(crow::websocket::connection& conn) {
 void MasterController::onClose(crow::websocket::connection& conn) {
     // check whether this connection has IdentificationInfo attached
     if (conn.userdata() == nullptr) {
-        CROW_LOG_INFO << "new websocket disconnected from "
-                      << conn.get_remote_ip();
+        CROW_LOG_INFO << "new websocket disconnected with unknown identity";
     } else {
         auto tmp = static_cast<IdentificationInfo*>(conn.userdata());
         conn.userdata(nullptr);
-        CROW_LOG_INFO << "new websocket disconnected from " << tmp->getPeerID()
-                      << " " << conn.get_remote_ip();
+        CROW_LOG_INFO << "new websocket disconnected from " << tmp->getPeerID();
 
         lock_.lock();
         id_to_connections.erase(tmp->getPeerID());
