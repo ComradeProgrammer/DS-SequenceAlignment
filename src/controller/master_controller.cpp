@@ -11,7 +11,7 @@ using std::make_shared;
 using std::move;
 using std::mutex;
 using std::string;
-void MasterController::onInit() {
+void MasterController::onInit(std::shared_ptr<Configuration> config) {
     // create a websocket server
     CROW_WEBSOCKET_ROUTE(app_, "/websocket")
         .onopen(bind(&MasterController::onOpen, this, std::placeholders::_1))
@@ -20,9 +20,10 @@ void MasterController::onInit() {
                         std::placeholders::_1, std::placeholders::_2,
                         std::placeholders::_3));
     // create service object
-    service_ = make_shared<MasterService>(this);
-    service_->onInit();
-
+    auto service = make_shared<MasterService>(this);
+    service_ = service;
+    service->setConfiguration(config);
+    service->onInit();
 }
 
 void MasterController::onOpen(crow::websocket::connection& conn) {
@@ -134,7 +135,8 @@ void MasterController::run(uint16_t listen_port) {
     //         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     //         // todo: remove test code
-    //         std::unordered_map<std::string, crow::websocket::connection*> tmp;
+    //         std::unordered_map<std::string, crow::websocket::connection*>
+    //         tmp;
     //         {
     //             std::lock_guard<mutex> block_lock(lock_);
     //             tmp = id_to_connections;

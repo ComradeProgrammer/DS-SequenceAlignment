@@ -27,9 +27,9 @@ add_subdirectory("third_party/gflags")
 
 add_subdirectory("third_party/googletest")
 # all the source files
-file(GLOB SOURCES "src/service/*.cpp" "src/controller/*.cpp" "src/model/*.cpp" "src/util/*.cpp")
+file(GLOB SOURCES "src/service/*.cpp" "src/controller/*.cpp" "src/model/*.cpp" "src/util/*.cpp"  "src/config/*.cpp")
 # all the test files
-file(GLOB TESTS "test/*.cpp" "test/service/*.cpp")
+file(GLOB TESTS "test/*.cpp"  "test/**/*.cpp")
 
 # build targets
 add_executable(master ${SOURCES} src/master.cpp)
