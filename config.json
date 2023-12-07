@@ -1,9 +1,9 @@
 {
     "masterWaitTime": 10,
-    "columnBlockSize": 4,
-    "rowBlockSize": 4,
+    "columnBlockSize": 50,
+    "rowBlockSize": 10,
     "sequenceRowType": "fasta",
-    "sequenceRowDataSource": "test.fasta",
+    "sequenceRowDataSource": "test_data/GCF_009858895.2_ASM985889v3_genomic.fna",
     "sequenceColumnType": "text",
     "sequenceColumnDataSource": "test.txt",
     "matchScore": 2,
