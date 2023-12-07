@@ -18,6 +18,7 @@ void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
     }
     string object_type = j["type"].template get<string>();
     lock_guard<mutex> lock_block(lock_);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     if (object_type == "ScoreMatrixTask") {
         auto task = make_shared<ScoreMatrixTask>();
         task->loadFromJsonObject(j);

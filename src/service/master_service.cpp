@@ -161,7 +161,7 @@ void MasterService::onTracebackTaskResponse(
 }
 void MasterService::onConnectionEstablished(const std::string peer_id) {
     lock_guard<mutex> lock_block(lock_);
-    CROW_LOG_INFO << "peer " << peer_id << "connected";
+    CROW_LOG_INFO << "peer " << peer_id << " connected";
     if (peer_id != BACKUP_MASTER_ID) {
         score_matrix_history_tasks_[peer_id] = {};
         current_tasks[peer_id] = nullptr;
@@ -171,7 +171,45 @@ void MasterService::onConnectionEstablished(const std::string peer_id) {
 }
 
 void MasterService::onConnectionTerminated(const std::string peer_id) {
-    // todo: implement
+    lock_guard<mutex> lock_block(lock_);
+    CROW_LOG_INFO << "peer " << peer_id << " disconnected";
+    if (peer_id == BACKUP_MASTER_ID) {
+        // if the backup master is down, we just do nothing
+        return;
+    }
+    // sequence of putting back tasks is essential!
+    // put current task into the front of the queue
+    //  we need to put all historical tasks into the front of the queue
+    if (current_tasks.find(peer_id) != current_tasks.end()) {
+        auto task = current_tasks[peer_id];
+        if (task != nullptr) {
+            task_queue_.push_front(task);
+            CROW_LOG_INFO << "put back " << task->getShortName()
+                          << "into taskqueue";
+        }
+    }
+    current_tasks.erase(peer_id);
+
+    if (score_matrix_history_tasks_.find(peer_id) !=
+        score_matrix_history_tasks_.end()) {
+        auto& history_tasks = score_matrix_history_tasks_[peer_id];
+        for (int i = history_tasks.size() - 1; i >= 0; i--) {
+            task_queue_.push_front(history_tasks[i]);
+            CROW_LOG_INFO << "put back " << history_tasks[i]->getShortName()
+                          << "into taskqueue";
+        }
+        score_matrix_history_tasks_.erase(peer_id);
+    }
+    // wipe out records in score_matrix_task_peer_id_
+    for (int i = 0; i < score_matrix_task_peer_id_.size(); i++) {
+        for (int j = 0; j < score_matrix_task_peer_id_[i].size(); j++) {
+            if (score_matrix_task_peer_id_[i][j] == peer_id) {
+                score_matrix_task_peer_id_[i][j] = "";
+            }
+        }
+    }
+    // trigger resending tasks
+    assignTasks();
 }
 
 shared_ptr<ScoreMatrixTask> MasterService::generateScoreMatrixTask(int x,
