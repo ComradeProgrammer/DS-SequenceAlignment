@@ -9,10 +9,12 @@
 #include "service/abstract_service.h"
 #include "websocketpp/client.hpp"
 #include "websocketpp/config/asio_no_tls_client.hpp"
+#include "config/configuration.h"
+
 class BackupMasterController : public AbstractController {
    public:
     void establishConnection();
-    void onInit();
+    void onInit(std::shared_ptr<Configuration> config);
     void run(uint16_t port);
     void onOpen(crow::websocket::connection &conn);
     void onClose(crow::websocket::connection &conn);

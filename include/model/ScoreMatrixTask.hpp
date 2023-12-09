@@ -5,7 +5,7 @@
 class ScoreMatrixTask : public AbstractTask {
    public:
    virtual ~ScoreMatrixTask()=default;
-    virtual std::string toJson() override{
+    virtual nlohmann::json toJsonObject() override{
         nlohmann::json j;
         j["type"] = "ScoreMatrixTask";
         j["leftTopElement"] = left_top_element_;
@@ -19,7 +19,7 @@ class ScoreMatrixTask : public AbstractTask {
         j["mismatchPenalty"] = mismatch_pentalty_;
         //j["gapExtra"] = gap_extra_;
         j["gapOpen"] = gap_open_;
-        return j.dump();
+        return j;
     }
     virtual void loadFromJsonObject(const nlohmann::json& j) override{
         left_top_element_ = j["leftTopElement"].template get<int>();

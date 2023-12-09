@@ -5,7 +5,7 @@
 class ScoreMatrixTaskResponse : public AbstractJsonObject {
    public:
    virtual ~ScoreMatrixTaskResponse ()=default;
-    virtual std::string toJson() override {
+    virtual nlohmann::json toJsonObject() override {
         nlohmann::json j;
         j["type"] = "ScoreMatrixTaskResponse";
         j["bottomRow"] = bottom_row_;
@@ -15,7 +15,7 @@ class ScoreMatrixTaskResponse : public AbstractJsonObject {
         j["maxScore"] = max_score_;
         j["maxScoreX"] = max_score_x_;
         j["maxScoreY"] = max_score_y_;
-        return j.dump();
+        return j;
     }
 
     virtual void loadFromJsonObject(const nlohmann::json& j) override {
