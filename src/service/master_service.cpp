@@ -12,8 +12,8 @@ MasterService::MasterService(AbstractController* controller)
     // constructor
 }
 void MasterService::onInit() {
-    // todo: read the parameters  from somewhere and set them
-
+    // todo: reconsider
+    is_backup_master_online_ = true;
     if (config_ != nullptr) {
         column_block_size_ = config_->column_block_size_;
         row_block_size_ = config_->row_block_size_;
@@ -57,6 +57,25 @@ void MasterService::onInit() {
     auto task = generateScoreMatrixTask(0, 0);
     task_queue_.push_back(task);
     CROW_LOG_INFO << "add task 0,0 into queue";
+
+    if (is_master_) {
+        thread([this]() {
+            while (1) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                lock_guard<mutex> lock_block(lock_);
+                if (is_backup_master_online_) {
+                    while (!to_back_master_queue_.empty()) {
+                        auto obj = to_back_master_queue_.front();
+                        to_back_master_queue_.pop_front();
+                        string message = obj->toJson();
+                        CROW_LOG_INFO << "send message to backup_master"
+                                      << message;
+                        sendMessageToPeer(BACKUP_MASTER_ID, message);
+                    }
+                }
+            }
+        }).detach();
+    }
     // wait for a period of time
     lock_.lock();
     thread([this]() {
@@ -79,6 +98,7 @@ void MasterService::onNewMessage(std::string peer_id,
     }
     string object_type = j["type"].template get<string>();
     lock_guard<mutex> lock_block(lock_);
+
     if (object_type == "ScoreMatrixTaskResponse") {
         auto response = make_shared<ScoreMatrixTaskResponse>();
         response->loadFromJsonObject(j);
@@ -111,6 +131,7 @@ void MasterService::onScoreMatrixTaskResponse(
     score_matrix_history_tasks_[peer_id].push_back(current_task);
 
     score_matrix_task_blocks_[x][y] = response;
+    score_matrix_task_peer_id_[current_task->x_][current_task->y_] = peer_id;
 
     if (x == score_matrix_task_blocks_.size() - 1 &&
         y == score_matrix_task_blocks_[0].size() - 1) {
@@ -118,18 +139,43 @@ void MasterService::onScoreMatrixTaskResponse(
         // starting the first traceback task
         auto new_task = genearteTracebackTask(max_score_x_, max_score_y_);
         task_queue_.push_back(new_task);
+        if (is_master_ && is_backup_master_online_) {
+            CROW_LOG_INFO << "send sync message to backup master";
+            shared_ptr<StateSyncObject> ptr = make_shared<StateSyncObject>();
+            ptr->task_ = new_task;
+            ptr->sync_type_ = "queuePushBack";
+            to_back_master_queue_.push_back(ptr);
+        }
         CROW_LOG_INFO << "add " << new_task->getShortName() << " into queue";
     } else {
         // update tasks queue
         if (checkDependencyForScoreMatrix(x, y + 1)) {
             auto new_task = generateScoreMatrixTask(x, y + 1);
             task_queue_.push_back(new_task);
+
+            if (is_master_ && is_backup_master_online_) {
+                CROW_LOG_INFO << "send sync message to backup master";
+                shared_ptr<StateSyncObject> ptr =
+                    make_shared<StateSyncObject>();
+                ptr->task_ = new_task;
+                ptr->sync_type_ = "queuePushBack";
+                to_back_master_queue_.push_back(ptr);
+            }
             CROW_LOG_INFO << "add score matrix task " << x << "," << y + 1
                           << "into queue";
         }
+
         if (checkDependencyForScoreMatrix(x + 1, y)) {
             auto new_task = generateScoreMatrixTask(x + 1, y);
             task_queue_.push_back(new_task);
+            if (is_master_ && is_backup_master_online_) {
+                CROW_LOG_INFO << "send sync message to backup master";
+                shared_ptr<StateSyncObject> ptr =
+                    make_shared<StateSyncObject>();
+                ptr->task_ = new_task;
+                ptr->sync_type_ = "queuePushBack";
+                to_back_master_queue_.push_back(ptr);
+            }
             CROW_LOG_INFO << "add score matrix task " << x + 1 << "," << y
                           << "into queue";
         }
@@ -154,6 +200,13 @@ void MasterService::onTracebackTaskResponse(
     current_tasks[peer_id] = nullptr;
 
     auto new_task = genearteTracebackTask(next_step_x, next_step_y);
+    if (is_master_ && is_backup_master_online_) {
+        CROW_LOG_INFO << "send sync message to backup master";
+        shared_ptr<StateSyncObject> ptr = make_shared<StateSyncObject>();
+        ptr->task_ = new_task;
+        ptr->sync_type_ = "queuePushBack";
+        to_back_master_queue_.push_back(ptr);
+    }
     task_queue_.push_back(new_task);
 
     // trigger resending tasks
@@ -165,6 +218,8 @@ void MasterService::onConnectionEstablished(const std::string peer_id) {
     if (peer_id != BACKUP_MASTER_ID) {
         score_matrix_history_tasks_[peer_id] = {};
         current_tasks[peer_id] = nullptr;
+    } else {
+        is_backup_master_online_ = true;
     }
     // trigger resending tasks
     assignTasks();
@@ -260,21 +315,26 @@ bool MasterService::checkDependencyForScoreMatrix(int x, int y) {
     if (x == 0 && y == 0) {
         return true;
     } else if (x == 0) {
-        if (score_matrix_task_blocks_[x][y - 1] != nullptr) {
+        if (score_matrix_task_blocks_[x][y - 1] != nullptr &&
+            score_matrix_task_peer_id_[x][y - 1] != "") {
             return true;
         }
         return false;
     } else if (y == 0) {
-        if (score_matrix_task_blocks_[x - 1][y] != nullptr) {
+        if (score_matrix_task_blocks_[x - 1][y] != nullptr &&
+            score_matrix_task_peer_id_[x - 1][y] != "") {
             return true;
         }
         return false;
     } else {
         if (score_matrix_task_blocks_[x][y - 1] == nullptr ||
-            score_matrix_task_blocks_[x - 1][y] == nullptr) {
+            score_matrix_task_blocks_[x - 1][y] == nullptr ||
+            score_matrix_task_peer_id_[x][y - 1] == "" ||
+            score_matrix_task_peer_id_[x - 1][y] == "") {
             return false;
         }
-        if (score_matrix_task_blocks_[x - 1][y - 1] == nullptr) {
+        if (score_matrix_task_blocks_[x - 1][y - 1] == nullptr ||
+            score_matrix_task_peer_id_[x - 1][y - 1] == "") {
             return false;
         }
         return true;
@@ -283,6 +343,7 @@ bool MasterService::checkDependencyForScoreMatrix(int x, int y) {
 void MasterService::assignTasks() {
     while (!task_queue_.empty()) {
         auto task = task_queue_.front();
+        cout << "here300 " << (task == nullptr) << endl;
         auto score_task = dynamic_pointer_cast<ScoreMatrixTask>(task);
         string idle_peer = "";
 
@@ -300,6 +361,15 @@ void MasterService::assignTasks() {
                 score_matrix_task_peer_id_[score_task->x_][score_task->y_] =
                     idle_peer;
                 task_queue_.pop_front();
+                if (is_master_ && is_backup_master_online_) {
+                    CROW_LOG_INFO << "send sync message to backup master";
+                    shared_ptr<StateSyncObject> ptr =
+                        make_shared<StateSyncObject>();
+                    ptr->task_ = task;
+                    ptr->sync_type_ = "assignTask";
+                    ptr->peer_id_ = idle_peer;
+                    to_back_master_queue_.push_back(ptr);
+                }
 
                 sendTaskToNode(idle_peer, task);
             } else {
@@ -329,11 +399,20 @@ void MasterService::assignTasks() {
                 return;
             }
             if (current_tasks[peer_id] == nullptr) {
-                // this node is working. cancel the schedule and wait for the
-                // next time
                 task_queue_.pop_front();
+                if (is_master_ && is_backup_master_online_) {
+                    CROW_LOG_INFO << "send sync message to backup master";
+                    shared_ptr<StateSyncObject> ptr =
+                        make_shared<StateSyncObject>();
+                    ptr->task_ = task;
+                    ptr->sync_type_ = "assignTask";
+                    ptr->peer_id_ = idle_peer;
+                    to_back_master_queue_.push_back(ptr);
+                }
                 sendTaskToNode(peer_id, task);
             } else {
+                // this node is working. cancel the schedule and wait for the
+                // next time
                 CROW_LOG_WARNING << peer_id
                                  << " is working, schdeuling canceled";
             }

@@ -1,4 +1,5 @@
 #include "controller/backup_master_controller.h"
+#include "config/configuration.h"
 
 #include "crow/logging.h"
 #include "model/IdentificationInfo.hpp"
@@ -11,7 +12,7 @@ using std::make_shared;
 using std::move;
 using std::mutex;
 using std::string;
-void BackupMasterController::onInit() {
+void BackupMasterController::onInit(std::shared_ptr<Configuration> config) {
     CROW_WEBSOCKET_ROUTE(app_, "/websocket")
         .onopen(
             bind(&BackupMasterController::onOpen, this, std::placeholders::_1))
@@ -20,8 +21,11 @@ void BackupMasterController::onInit() {
         .onmessage(bind(&BackupMasterController::onMessage, this,
                         std::placeholders::_1, std::placeholders::_2,
                         std::placeholders::_3));
-    service_ = make_shared<BackupMasterService>(this);
-    service_->onInit();
+
+    auto service = make_shared<BackupMasterService>(this);
+    service_ = service;
+    service->setConfiguration(config);
+    service->onInit();
 }
 void BackupMasterController::establishConnection() {
     master_client_.set_access_channels(websocketpp::log::alevel::none);

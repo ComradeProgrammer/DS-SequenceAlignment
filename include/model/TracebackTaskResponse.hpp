@@ -5,7 +5,7 @@
 class TracebackTaskResponse : public AbstractJsonObject {
    public:
     virtual ~TracebackTaskResponse() = default;
-    virtual std::string toJson() override {
+    virtual nlohmann::json toJsonObject() override {
         nlohmann::json j;
         j["type"] = "TracebackTaskResponse";
         j["x"] = x_;
@@ -14,7 +14,7 @@ class TracebackTaskResponse : public AbstractJsonObject {
         j["endY"] = end_y_;
         j["sequence"] = sequence_;
         j["halt"] = halt_;
-        return j.dump();
+        return j;
     }
     virtual void loadFromJsonObject(const nlohmann::json& j) override {
         x_ = j["x"].template get<int>();

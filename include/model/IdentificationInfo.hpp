@@ -12,12 +12,12 @@ class IdentificationInfo : public AbstractJsonObject {
     std::string getPeerID() { return peer_id_; }
     bool isBackUpMaster() { return is_backup_master_; }
 
-    virtual std::string toJson() override {
+    virtual nlohmann::json toJsonObject()override {
         nlohmann::json j;
         j["type"] = "IdentificationInfo";
         j["peerID"] = peer_id_;
         j["isBackUpMaster"] = is_backup_master_;
-        return j.dump();
+        return j;
     }
 
     virtual void loadFromJsonObject(const nlohmann::json& j) override {

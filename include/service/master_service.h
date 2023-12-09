@@ -6,6 +6,7 @@
 #include "config/configuration.h"
 #include "model/ScoreMatrixTask.hpp"
 #include "model/ScoreMatrixTaskResponse.hpp"
+#include "model/StateSyncObject.hpp"
 #include "model/TracebackTask.hpp"
 #include "model/TracebackTaskResponse.hpp"
 #include "nlohmann/json.hpp"
@@ -18,7 +19,7 @@ class MasterService : public AbstractService {
                               bool is_binary) override;
     virtual void onConnectionEstablished(const std::string peer_id) override;
     virtual void onConnectionTerminated(const std::string peer_id) override;
-    inline void setConfiguration(std::shared_ptr<Configuration> config) {
+    virtual void setConfiguration(std::shared_ptr<Configuration> config) {
         config_ = config;
     }
 
@@ -68,10 +69,15 @@ class MasterService : public AbstractService {
 
     std::mutex lock_;
 
+    bool is_master_ = true;
+    bool is_backup_master_online_ = false;
+
+    std::deque<std::shared_ptr<StateSyncObject>> to_back_master_queue_;
+
    protected:
-    void onScoreMatrixTaskResponse(
+    virtual void onScoreMatrixTaskResponse(
         std::string peer_id, std::shared_ptr<ScoreMatrixTaskResponse> response);
-    void onTracebackTaskResponse(
+    virtual void onTracebackTaskResponse(
         std::string peer_id, std::shared_ptr<TracebackTaskResponse> response);
 
     // generateTask construct a task object
@@ -82,7 +88,7 @@ class MasterService : public AbstractService {
     // checkDependency checks whether block(x,y) can be calculated
     // it will check whether this blocks exists so it is okay if the index
     // overflows lock needs to be aquired before calling this function
-    bool checkDependencyForScoreMatrix(int x, int y);
+    virtual bool checkDependencyForScoreMatrix(int x, int y);
 
     // assignTasks will look for idle nodes
     // and try to assign some tasks for them
@@ -99,8 +105,8 @@ class MasterService : public AbstractService {
     virtual std::shared_ptr<TracebackTask> genearteTracebackTask(int prev_x,
                                                                  int prev_y);
 
-    void getSequence(std::string data_type, std::string data_source,
-                            std::string& out_res);
+    virtual void getSequence(std::string data_type, std::string data_source,
+                             std::string& out_res);
 };
 
 #endif
