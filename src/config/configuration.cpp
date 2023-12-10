@@ -35,17 +35,18 @@ bool Configuration::loadFromFile(string file_path) {
         row_block_size_ = j["rowBlockSize"].template get<int>();
     }
 
-    if (j.contains("sequenceRowType")) {
-        sequence_row_type_ = j["sequenceRowType"].template get<string>();
-    }
-
-    if (j.contains("sequenceRowDataSource")) {
-        sequence_row_data_source_ =
-            j["sequenceRowDataSource"].template get<string>();
+    if (j.contains("rowSequences")) {
+        for (auto& element : j["rowSequences"].items()) {
+            auto obj=element.value();
+            row_sequences.push_back(Sequence{
+                obj["sequenceRowDataSource"].template get<string>(),
+                obj["sequenceRowType"].template get<string>(),
+            });
+        }
     }
 
     if (j.contains("sequenceColumnType")) {
-        sequence_column_type_ = j["sequenceRowType"].template get<string>();
+        sequence_column_type_ = j["sequenceColumnType"].template get<string>();
     }
 
     if (j.contains("sequenceColumnDataSource")) {

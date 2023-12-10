@@ -11,7 +11,8 @@ using std::make_shared;
 using std::move;
 using std::mutex;
 using std::string;
-void MasterController::onInit(std::shared_ptr<Configuration> config) {
+void MasterController::onInit(std::shared_ptr<Configuration> config,
+                              bool backup) {
     // create a websocket server
     CROW_WEBSOCKET_ROUTE(app_, "/websocket")
         .onopen(bind(&MasterController::onOpen, this, std::placeholders::_1))
@@ -22,6 +23,7 @@ void MasterController::onInit(std::shared_ptr<Configuration> config) {
     // create service object
     auto service = make_shared<MasterService>(this);
     service_ = service;
+    service->setBackupMasterOnline(backup);
     service->setConfiguration(config);
     service->onInit();
 }
@@ -127,23 +129,5 @@ void MasterController::sendMessageToPeer(const std::string& peer_id,
     connection->send_binary(string(data, len));
 }
 void MasterController::run(uint16_t listen_port) {
-    // todo: remove test codes
-    // std::thread([this]() {
-    //     while (1) {
-    //         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    //         // todo: remove test code
-    //         std::unordered_map<std::string, crow::websocket::connection*>
-    //         tmp;
-    //         {
-    //             std::lock_guard<mutex> block_lock(lock_);
-    //             tmp = id_to_connections;
-    //         }
-    //         for (auto p : tmp) {
-    //             CROW_LOG_INFO << "send to " << p.first;
-    //             sendMessageToPeer(p.first, "response");
-    //         }
-    //     }
-    // }).detach();
     app_.port(listen_port).multithreaded().run();
 }

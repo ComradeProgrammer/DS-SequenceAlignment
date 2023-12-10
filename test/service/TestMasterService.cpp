@@ -26,11 +26,11 @@ class TestMasterService : public testing::Test {
         // inject some test data
         service->column_block_size_ = 2;
         service->row_block_size_ = 2;
-        service->sequence_row_ = "ACACACTA";
+        service->sequence_row_ = {"ACACACTA"};
         service->sequence_column_ = "AGCACACA";
         service->match_score_ = 1;
         service->mismatch_pentalty_ = 2;
-        //service->gap_extra_ = 3;
+        // service->gap_extra_ = 3;
         service->gap_open_ = 4;
     }
 };
@@ -44,11 +44,11 @@ TEST_F(TestMasterService, TestOnInit) {
     service->onInit();
 
     // check whether task_blocks were properly initialzied
-    ASSERT_EQ(service->score_matrix_task_blocks_.size(), 4);
     ASSERT_EQ(service->score_matrix_task_blocks_[0].size(), 4);
+    ASSERT_EQ(service->score_matrix_task_blocks_[0][0].size(), 4);
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            ASSERT_EQ(service->score_matrix_task_blocks_[i][j], nullptr);
+            ASSERT_EQ(service->score_matrix_task_blocks_[0][i][j], nullptr);
         }
     }
     // there should be task (0,0) in the queue
@@ -58,10 +58,10 @@ TEST_F(TestMasterService, TestOnInit) {
     ASSERT_NE(first_task, nullptr);
     ASSERT_EQ(first_task->x_, 0);
     ASSERT_EQ(first_task->y_, 0);
-    //ASSERT_EQ(first_task->gap_extra_, service->gap_extra_);
+    // ASSERT_EQ(first_task->gap_extra_, service->gap_extra_);
     ASSERT_EQ(first_task->gap_open_, service->gap_open_);
     ASSERT_EQ(first_task->match_score_, service->match_score_);
-    //ASSERT_EQ(first_task->gap_extra_, service->gap_extra_);
+    // ASSERT_EQ(first_task->gap_extra_, service->gap_extra_);
 
     // delete the objects
     delete controller;
@@ -73,6 +73,7 @@ TEST_F(TestMasterService, TestOnConnectionEstablished) {
     atomic<bool> ok = false;
     controller = customized_controller;
     service = new MasterService(controller);
+    service->setBackupMasterOnline(false);
     customized_controller->send_message_to_peer_text_ =
         [&ok, this](string peer_id, string message) {
             // should be "slave1"
@@ -86,11 +87,11 @@ TEST_F(TestMasterService, TestOnConnectionEstablished) {
 
             ASSERT_EQ(assign.x_, 0);
             ASSERT_EQ(assign.y_, 0);
-            //ASSERT_EQ(assign.gap_extra_, service->gap_extra_);
+            // ASSERT_EQ(assign.gap_extra_, service->gap_extra_);
             ASSERT_EQ(assign.gap_open_, service->gap_open_);
             ASSERT_EQ(assign.match_score_, service->match_score_);
-           // ASSERT_EQ(assign.gap_extra_, service->gap_extra_);
-            //ASSERT_EQ(assign.gap_extra_, service->gap_extra_);
+            // ASSERT_EQ(assign.gap_extra_, service->gap_extra_);
+            // ASSERT_EQ(assign.gap_extra_, service->gap_extra_);
             ASSERT_EQ(assign.sequence_column_, "AG");
             ASSERT_EQ(assign.sequence_row_, "AC");
             ok = true;
@@ -153,9 +154,9 @@ TEST_F(TestMasterService, TestOnNewMessage) {
     ASSERT_EQ(current_task->x_, 0);
     ASSERT_EQ(current_task->y_, 1);
     // task(0,0) should be in history task of slave1
-    ASSERT_EQ(service->score_matrix_history_tasks_["slave1"].size(), 1);
-    ASSERT_EQ(service->score_matrix_history_tasks_["slave1"][0]->x_, 0);
-    ASSERT_EQ(service->score_matrix_history_tasks_["slave1"][0]->y_, 0);
+    ASSERT_EQ(service->score_matrix_history_tasks_[0]["slave1"].size(), 1);
+    ASSERT_EQ(service->score_matrix_history_tasks_[0]["slave1"][0]->x_, 0);
+    ASSERT_EQ(service->score_matrix_history_tasks_[0]["slave1"][0]->y_, 0);
 
     // task(1,0) should be in the task queue
     ASSERT_EQ(service->task_queue_.size(), 1);
@@ -203,9 +204,9 @@ TEST_F(TestMasterService, TestScoreMatrixDistribution) {
                 string json_message = resp->toJson();
                 service->onNewMessage(peer_id, json_message, false);
                 counter++;
-            }else if(counter==16){
+            } else if (counter == 16) {
                 ASSERT_EQ(j["type"].template get<string>(), "TracebackTask");
-            }else{
+            } else {
                 return;
             }
         };
@@ -223,11 +224,11 @@ TEST_F(TestMasterService, TestScoreMatrixDistribution) {
     }
     service->lock_.lock();
     // check whether all tasks have results
-    ASSERT_EQ(service->score_matrix_task_blocks_.size(), 4);
     ASSERT_EQ(service->score_matrix_task_blocks_[0].size(), 4);
+    ASSERT_EQ(service->score_matrix_task_blocks_[0][0].size(), 4);
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            ASSERT_NE(service->score_matrix_task_blocks_[i][j], nullptr);
+            ASSERT_NE(service->score_matrix_task_blocks_[0][i][j], nullptr);
         }
     }
     // check no running tasks for node or in queue

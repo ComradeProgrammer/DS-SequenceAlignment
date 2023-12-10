@@ -14,7 +14,7 @@ class MasterController : public AbstractController {
    public:
     MasterController() = default;
     virtual ~MasterController() = default;
-    void onInit(std::shared_ptr<Configuration> config);
+    void onInit(std::shared_ptr<Configuration> config, bool backup);
     void onOpen(crow::websocket::connection &conn);
     void onClose(crow::websocket::connection &conn);
     void onMessage(crow::websocket::connection &conn, const std::string &data,

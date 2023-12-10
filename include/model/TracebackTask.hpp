@@ -14,6 +14,7 @@ class TracebackTask : public AbstractTask {
         j["y"] = y_;
         j["startX"] = start_x_;
         j["startY"] = start_y_;
+        j["rowID"] = row_id_;
         return j;
     }
     virtual void loadFromJsonObject(const nlohmann::json& j)override {
@@ -21,10 +22,12 @@ class TracebackTask : public AbstractTask {
         y_ = j["y"].template get<int>();
         start_x_ = j["startX"].template get<int>();
         start_y_ = j["startY"].template get<int>();
+        row_id_ = j["rowID"].template get<int>();
+
     }
 
     virtual std::string getShortName() override {
-        return "TracebackTask(" + std::to_string(x_) + "," + std::to_string(y_) + ")";
+        return "TracebackTask["+std::to_string(row_id_)+"](" + std::to_string(x_) + "," + std::to_string(y_) + ")";
     }
 
    public:
@@ -36,6 +39,9 @@ class TracebackTask : public AbstractTask {
     int start_x_;
     // where traceback ends
     int start_y_;
+
+    int row_id_;
+    
 };
 
 #endif

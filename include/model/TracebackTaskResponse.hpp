@@ -14,6 +14,7 @@ class TracebackTaskResponse : public AbstractJsonObject {
         j["endY"] = end_y_;
         j["sequence"] = sequence_;
         j["halt"] = halt_;
+        j["rowID"] = row_id_;
         return j;
     }
     virtual void loadFromJsonObject(const nlohmann::json& j) override {
@@ -23,6 +24,7 @@ class TracebackTaskResponse : public AbstractJsonObject {
         end_y_ = j["endY"].template get<int>();
         halt_ = j["halt"].template get<bool>();
         sequence_ = j["sequence"].template get<std::string>();
+        row_id_ = j["rowID"].template get<int>();
     }
 
    public:
@@ -38,6 +40,7 @@ class TracebackTaskResponse : public AbstractJsonObject {
     int end_y_;
     // whether we should halt
     bool halt_ = false;
+    int row_id_;
 };
 
 #endif
