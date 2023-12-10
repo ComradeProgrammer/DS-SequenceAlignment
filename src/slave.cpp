@@ -21,8 +21,7 @@ int main(int argc, char **argv) {
     controller.onInit();
     controller.establishConnection();
     
-    // todo: remove test code
-    // char datab[] = {1, 2, 3, 4};
+    
     while (1) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }

@@ -15,6 +15,8 @@ class ScoreMatrixTaskResponse : public AbstractJsonObject {
         j["maxScore"] = max_score_;
         j["maxScoreX"] = max_score_x_;
         j["maxScoreY"] = max_score_y_;
+        j["rowID"] = row_id_;
+
         return j;
     }
 
@@ -26,6 +28,8 @@ class ScoreMatrixTaskResponse : public AbstractJsonObject {
         max_score_ = j["maxScore"].template get<int>();
         max_score_x_ = j["maxScoreX"].template get<int>();
         max_score_y_ = j["maxScoreY"].template get<int>();
+        row_id_ = j["rowID"].template get<int>();
+
     }
 
    public:
@@ -36,6 +40,8 @@ class ScoreMatrixTaskResponse : public AbstractJsonObject {
     int max_score_;
     int max_score_x_;
     int max_score_y_;
+    int row_id_;
+
 };
 
 #endif

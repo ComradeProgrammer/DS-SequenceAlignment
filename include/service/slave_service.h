@@ -4,13 +4,13 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "controller/abstract_controller.h"
 #include "model/ScoreMatrixBlock.h"
 #include "model/ScoreMatrixTask.hpp"
 #include "model/ScoreMatrixTaskResponse.hpp"
 #include "model/TracebackTask.hpp"
 #include "model/TracebackTaskResponse.hpp"
 #include "service/abstract_service.h"
-#include "controller/abstract_controller.h"
 class SlaveService : public AbstractService {
    public:
     SlaveService(AbstractController* controller)
@@ -22,9 +22,10 @@ class SlaveService : public AbstractService {
     virtual void onConnectionTerminated(const std::string peer_id) override;
 
    private:
-    // x_y -> ScoreMatrixBlock
     std::mutex lock_;
-    std::unordered_map<std::string, std::shared_ptr<ScoreMatrixBlock>>
+    // row_id x_y -> ScoreMatrixBlock
+    std::unordered_map<
+        int, std::unordered_map<std::string, std::shared_ptr<ScoreMatrixBlock>>>
         score_matrix_blocks_;
     bool master_online_;
     bool backup_master_online_;

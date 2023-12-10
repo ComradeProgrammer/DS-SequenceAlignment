@@ -4,8 +4,8 @@
 #include "model/AbstractTask.hpp"
 class ScoreMatrixTask : public AbstractTask {
    public:
-   virtual ~ScoreMatrixTask()=default;
-    virtual nlohmann::json toJsonObject() override{
+    virtual ~ScoreMatrixTask() = default;
+    virtual nlohmann::json toJsonObject() override {
         nlohmann::json j;
         j["type"] = "ScoreMatrixTask";
         j["leftTopElement"] = left_top_element_;
@@ -17,11 +17,12 @@ class ScoreMatrixTask : public AbstractTask {
         j["sequenceColumn"] = sequence_column_;
         j["matchScore"] = match_score_;
         j["mismatchPenalty"] = mismatch_pentalty_;
-        //j["gapExtra"] = gap_extra_;
+        // j["gapExtra"] = gap_extra_;
         j["gapOpen"] = gap_open_;
+        j["rowID"] = row_id_;
         return j;
     }
-    virtual void loadFromJsonObject(const nlohmann::json& j) override{
+    virtual void loadFromJsonObject(const nlohmann::json& j) override {
         left_top_element_ = j["leftTopElement"].template get<int>();
         top_row_ = j["topRow"].template get<std::vector<int>>();
         left_column_ = j["leftColumn"].template get<std::vector<int>>();
@@ -31,12 +32,13 @@ class ScoreMatrixTask : public AbstractTask {
         sequence_column_ = j["sequenceColumn"].template get<std::string>();
         match_score_ = j["matchScore"].template get<int>();
         mismatch_pentalty_ = j["mismatchPenalty"].template get<int>();
-        //gap_extra_ = j["gapExtra"].template get<int>();
+        // gap_extra_ = j["gapExtra"].template get<int>();
         gap_open_ = j["gapOpen"].template get<int>();
+        row_id_ = j["rowID"].template get<int>();
     }
     virtual std::string getShortName() override {
-        return "ScoreMatrixTask(" + std::to_string(x_) + "," +
-               std::to_string(y_) + ")";
+        return "ScoreMatrixTask[" + std::to_string(row_id_) + "](" +
+               std::to_string(x_) + "," + std::to_string(y_) + ")";
     }
 
    public:
@@ -50,8 +52,10 @@ class ScoreMatrixTask : public AbstractTask {
 
     int match_score_;
     int mismatch_pentalty_;
-    //int gap_extra_;
+    // int gap_extra_;
     int gap_open_;
+
+    int row_id_;
 };
 
 #endif

@@ -1,10 +1,21 @@
 #ifndef __CONFIGURATION_H__
 #define __CONFIGURATION_H__
 #include <string>
+class Sequence {
+   public:
+        // "sequenceRowDataSource", required
+    // if "sequenceRowType" is fasta, then this is the location of fasta file
+    // if "sequenceRowType" is text, then this is the location of text file
+    // containing the sequence
+    std::string sequence_row_data_source_;
 
+    // if "sequenceRowType" is string, then this is the sequence string
+    // "sequenceRowType", required for the master, must be in
+    // "fasta","text","string"
+    std::string sequence_row_type_;
+};
 class Configuration {
    public:
-
     // "masterWaitTime", required for master,
     // master will wait for connections from slaves for this period of time
     // unit: second
@@ -14,16 +25,8 @@ class Configuration {
     int column_block_size_ = 0;
     // "rowBlockSize" required for the master
     int row_block_size_ = 0;
-
-    // "sequenceRowType", required for the master, must be in
-    // "fasta","text","string"
-    std::string sequence_row_type_;
-    // "sequenceRowDataSource", required
-    // if "sequenceRowType" is fasta, then this is the location of fasta file
-    // if "sequenceRowType" is text, then this is the location of text file
-    // containing the sequence
-    // if "sequenceRowType" is string, then this is the sequence string
-    std::string sequence_row_data_source_;
+    // RowSequences
+    std::vector<Sequence> row_sequences;
 
     // "sequenceColumnType",required by the master, usage is the same with
     // "sequenceRowType"

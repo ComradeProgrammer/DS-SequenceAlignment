@@ -18,7 +18,7 @@ void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
     }
     string object_type = j["type"].template get<string>();
     lock_guard<mutex> lock_block(lock_);
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     if (object_type == "ScoreMatrixTask") {
         auto task = make_shared<ScoreMatrixTask>();
         task->loadFromJsonObject(j);
@@ -53,9 +53,10 @@ void SlaveService::onConnectionTerminated(const std::string peer_id) {
 
 shared_ptr<ScoreMatrixTaskResponse> SlaveService::onScoreMatrixTask(
     std::shared_ptr<ScoreMatrixTask> task) {
+    int row_id = task->row_id_;
     auto block = calculateScoreMatrixBlock(task);
     string key = to_string(task->x_) + "_" + to_string(task->y_);
-    score_matrix_blocks_[key] = block;
+    score_matrix_blocks_[row_id][key] = block;
 
     // generate the result
     auto response = make_shared<ScoreMatrixTaskResponse>();
@@ -64,6 +65,7 @@ shared_ptr<ScoreMatrixTaskResponse> SlaveService::onScoreMatrixTask(
     response->max_score_ = block->max_score_;
     response->max_score_x_ = block->max_score_x_;
     response->max_score_y_ = block->max_score_y_;
+    response->row_id_ = row_id;
 
     int x_size = task->left_column_.size();
     int y_size = task->top_row_.size();
@@ -82,12 +84,15 @@ shared_ptr<ScoreMatrixTaskResponse> SlaveService::onScoreMatrixTask(
 }
 shared_ptr<TracebackTaskResponse> SlaveService::onTracebackTask(
     std::shared_ptr<TracebackTask> task) {
+    int row_id = task->row_id_;
+
     string key = to_string(task->x_) + "_" + to_string(task->y_);
-    if (score_matrix_blocks_.find(key) == score_matrix_blocks_.end()) {
+    if (score_matrix_blocks_[row_id].find(key) ==
+        score_matrix_blocks_[row_id].end()) {
         CROW_LOG_ERROR << "failed to find block " << key;
         return nullptr;
     }
-    auto response = traceBackOnBlock(task, score_matrix_blocks_[key]);
+    auto response = traceBackOnBlock(task, score_matrix_blocks_[row_id][key]);
     sendResultBack(response);
     return response;
 }
@@ -147,6 +152,7 @@ shared_ptr<TracebackTaskResponse> SlaveService::traceBackOnBlock(
     shared_ptr<TracebackTask> task, shared_ptr<ScoreMatrixBlock> block) {
     int x = task->start_x_;
     int y = task->start_y_;
+    int row_id = task->row_id_;
     vector<char> sequence;
     auto res = make_shared<TracebackTaskResponse>();
 
@@ -179,6 +185,7 @@ LABELA:
     res->end_y_ = y;
     res->x_ = task->x_;
     res->y_ = task->y_;
+    res->row_id_ = row_id;
     return res;
 }
 

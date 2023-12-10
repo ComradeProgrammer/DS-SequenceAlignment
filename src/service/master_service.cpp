@@ -13,7 +13,6 @@ MasterService::MasterService(AbstractController* controller)
 }
 void MasterService::onInit() {
     // todo: reconsider
-    is_backup_master_online_ = true;
     if (config_ != nullptr) {
         column_block_size_ = config_->column_block_size_;
         row_block_size_ = config_->row_block_size_;
@@ -21,8 +20,14 @@ void MasterService::onInit() {
         mismatch_pentalty_ = config_->mismatch_penalty_;
         gap_open_ = config_->gap_open_;
         init_wait_ = config_->master_wait_time;
-        getSequence(config_->sequence_row_type_,
-                    config_->sequence_row_data_source_, sequence_row_);
+        
+        for (int i = 0; i < config_->row_sequences.size(); i++) {
+            string sequence_row;
+            getSequence(config_->row_sequences[i].sequence_row_type_,
+                        config_->row_sequences[i].sequence_row_data_source_,
+                        sequence_row);
+            sequence_row_.push_back(sequence_row);
+        }
         getSequence(config_->sequence_column_type_,
                     config_->sequence_column_data_source_, sequence_column_);
         // Print the current config param for good
@@ -32,33 +37,50 @@ void MasterService::onInit() {
         CROW_LOG_INFO << "mismatch_pentalty: " << mismatch_pentalty_;
         CROW_LOG_INFO << "gap_open: " << gap_open_;
         CROW_LOG_INFO << "init_wait: " << init_wait_;
-        CROW_LOG_INFO << "sequence_row: " << sequence_row_;
+        for (int i = 0; i < sequence_row_.size(); i++) {
+            CROW_LOG_INFO << "sequence_row[" << i << "]: " << sequence_row_[i];
+        }
         CROW_LOG_INFO << "sequence_column: " << sequence_column_;
     }
 
-    // calculate how many rows and columns of block and init the tasks_blocks
-    int sequence_row_length = sequence_column_.size();
-    int sequence_column_length = sequence_row_.size();
+    max_score_ = vector<int>(sequence_row_.size(), -1);
+    max_score_x_ = vector<int>(sequence_row_.size());
+    max_score_y_ = vector<int>(sequence_row_.size());
+    result_ = vector<string>(sequence_row_.size(), "");
 
-    int row_num = (sequence_row_length % row_block_size_) == 0
-                      ? (sequence_row_length / row_block_size_)
-                      : (sequence_row_length / row_block_size_ + 1);
-    int column_num = (sequence_column_length % column_block_size_) == 0
-                         ? (sequence_column_length / column_block_size_)
-                         : (sequence_column_length / column_block_size_ + 1);
+    for (int j = 0; j < sequence_row_.size(); j++) {
+        // calculate how many rows and columns of block and init the
+        // tasks_blocks
+        int sequence_row_length = sequence_column_.size();
+        int sequence_column_length = sequence_row_[j].size();
 
-    for (int i = 0; i < row_num; i++) {
+        int row_num = (sequence_row_length % row_block_size_) == 0
+                          ? (sequence_row_length / row_block_size_)
+                          : (sequence_row_length / row_block_size_ + 1);
+        int column_num =
+            (sequence_column_length % column_block_size_) == 0
+                ? (sequence_column_length / column_block_size_)
+                : (sequence_column_length / column_block_size_ + 1);
+
         score_matrix_task_blocks_.push_back(
-            vector<shared_ptr<ScoreMatrixTaskResponse>>(column_num, nullptr));
-        score_matrix_task_peer_id_.push_back(vector<string>(column_num, ""));
+            vector<vector<shared_ptr<ScoreMatrixTaskResponse>>>());
+        score_matrix_task_peer_id_.push_back(vector<vector<string>>());
+        score_matrix_history_tasks_.push_back({});
+        for (int i = 0; i < row_num; i++) {
+            score_matrix_task_blocks_[j].push_back(
+                vector<shared_ptr<ScoreMatrixTaskResponse>>(column_num,
+                                                            nullptr));
+            score_matrix_task_peer_id_[j].push_back(
+                vector<string>(column_num, ""));
+        }
+
+        // init the task queue with the first task
+        auto task = generateScoreMatrixTask(j, 0, 0);
+        task_queue_.push_back(task);
+        CROW_LOG_INFO << "add task " << task->getShortName() << " into queue";
     }
-
-    // init the task queue with the first task
-    auto task = generateScoreMatrixTask(0, 0);
-    task_queue_.push_back(task);
-    CROW_LOG_INFO << "add task 0,0 into queue";
-
-    if (is_master_) {
+    // this thread is for syncing messages to the backup master
+    if (is_master_ && is_backup_master_online_) {
         thread([this]() {
             while (1) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -113,11 +135,12 @@ void MasterService::onScoreMatrixTaskResponse(
     string peer_id, shared_ptr<ScoreMatrixTaskResponse> response) {
     int x = response->x_;
     int y = response->y_;
+    int row_id = response->row_id_;
     // record the best score
-    if (response->max_score_ > max_score_) {
-        max_score_ = response->max_score_;
-        max_score_x_ = x * row_block_size_ + response->max_score_x_;
-        max_score_y_ = y * column_block_size_ + response->max_score_y_;
+    if (response->max_score_ > max_score_[row_id]) {
+        max_score_[row_id] = response->max_score_;
+        max_score_x_[row_id] = x * row_block_size_ + response->max_score_x_;
+        max_score_y_[row_id] = y * column_block_size_ + response->max_score_y_;
     }
     // mark current node to be idle, and record current task into the
     // history task
@@ -128,16 +151,18 @@ void MasterService::onScoreMatrixTaskResponse(
     auto current_task =
         dynamic_pointer_cast<ScoreMatrixTask>(current_tasks[peer_id]);
     current_tasks[peer_id] = nullptr;
-    score_matrix_history_tasks_[peer_id].push_back(current_task);
+    score_matrix_history_tasks_[row_id][peer_id].push_back(current_task);
 
-    score_matrix_task_blocks_[x][y] = response;
-    score_matrix_task_peer_id_[current_task->x_][current_task->y_] = peer_id;
+    score_matrix_task_blocks_[row_id][x][y] = response;
+    score_matrix_task_peer_id_[row_id][current_task->x_][current_task->y_] =
+        peer_id;
 
-    if (x == score_matrix_task_blocks_.size() - 1 &&
-        y == score_matrix_task_blocks_[0].size() - 1) {
+    if (x == score_matrix_task_blocks_[row_id].size() - 1 &&
+        y == score_matrix_task_blocks_[row_id][0].size() - 1) {
         // all the blocks have been calculated
         // starting the first traceback task
-        auto new_task = genearteTracebackTask(max_score_x_, max_score_y_);
+        auto new_task = genearteTracebackTask(row_id, max_score_x_[row_id],
+                                              max_score_y_[row_id]);
         task_queue_.push_back(new_task);
         if (is_master_ && is_backup_master_online_) {
             CROW_LOG_INFO << "send sync message to backup master";
@@ -149,8 +174,10 @@ void MasterService::onScoreMatrixTaskResponse(
         CROW_LOG_INFO << "add " << new_task->getShortName() << " into queue";
     } else {
         // update tasks queue
-        if (checkDependencyForScoreMatrix(x, y + 1)) {
-            auto new_task = generateScoreMatrixTask(x, y + 1);
+        if (checkDependencyForScoreMatrix(row_id, x, y + 1) &&
+            score_matrix_task_peer_id_[row_id][x][y + 1] == "") {
+            score_matrix_task_peer_id_[row_id][x][y + 1] = "#pending";
+            auto new_task = generateScoreMatrixTask(row_id, x, y + 1);
             task_queue_.push_back(new_task);
 
             if (is_master_ && is_backup_master_online_) {
@@ -161,12 +188,15 @@ void MasterService::onScoreMatrixTaskResponse(
                 ptr->sync_type_ = "queuePushBack";
                 to_back_master_queue_.push_back(ptr);
             }
-            CROW_LOG_INFO << "add score matrix task " << x << "," << y + 1
-                          << "into queue";
+            CROW_LOG_INFO << "add score matrix task "
+                          << new_task->getShortName() << "into queue";
         }
 
-        if (checkDependencyForScoreMatrix(x + 1, y)) {
-            auto new_task = generateScoreMatrixTask(x + 1, y);
+        if (checkDependencyForScoreMatrix(row_id, x + 1, y) &&
+            score_matrix_task_peer_id_[row_id][x + 1][y] == "") {
+            score_matrix_task_peer_id_[row_id][x + 1][y] = "#pending";
+
+            auto new_task = generateScoreMatrixTask(row_id, x + 1, y);
             task_queue_.push_back(new_task);
             if (is_master_ && is_backup_master_online_) {
                 CROW_LOG_INFO << "send sync message to backup master";
@@ -176,8 +206,8 @@ void MasterService::onScoreMatrixTaskResponse(
                 ptr->sync_type_ = "queuePushBack";
                 to_back_master_queue_.push_back(ptr);
             }
-            CROW_LOG_INFO << "add score matrix task " << x + 1 << "," << y
-                          << "into queue";
+            CROW_LOG_INFO << "add score matrix task "
+                          << new_task->getShortName() << "into queue";
         }
     }
     // trigger resending tasks
@@ -186,20 +216,26 @@ void MasterService::onScoreMatrixTaskResponse(
 }
 void MasterService::onTracebackTaskResponse(
     string peer_id, shared_ptr<TracebackTaskResponse> response) {
-    result_ = response->sequence_ + result_;
+    int row_id = response->row_id_;
+    result_[row_id] = response->sequence_ + result_[row_id];
     int next_step_x = response->x_ * row_block_size_ + response->end_x_;
     int next_step_y = response->y_ * column_block_size_ + response->end_y_;
+
     // check whether trace back should stop
     if (response->halt_ || !(next_step_x >= 0 && next_step_y >= 0)) {
         // weh should stop now. we got the result
-        cout << "Result got" << endl;
-        cout << result_ << endl;
+        cout << "Result got for sequence " << row_id << endl;
+        cout << result_[row_id] << endl;
+        // clear the task of peer
+        current_tasks[peer_id] = nullptr;
+        // trigger resending tasks
+        assignTasks();
         return;
     }
     // clear the task of peer
     current_tasks[peer_id] = nullptr;
 
-    auto new_task = genearteTracebackTask(next_step_x, next_step_y);
+    auto new_task = genearteTracebackTask(row_id, next_step_x, next_step_y);
     if (is_master_ && is_backup_master_online_) {
         CROW_LOG_INFO << "send sync message to backup master";
         shared_ptr<StateSyncObject> ptr = make_shared<StateSyncObject>();
@@ -216,7 +252,9 @@ void MasterService::onConnectionEstablished(const std::string peer_id) {
     lock_guard<mutex> lock_block(lock_);
     CROW_LOG_INFO << "peer " << peer_id << " connected";
     if (peer_id != BACKUP_MASTER_ID) {
-        score_matrix_history_tasks_[peer_id] = {};
+        for (int i = 0; i < sequence_row_.size(); i++) {
+            score_matrix_history_tasks_[i][peer_id] = {};
+        }
         current_tasks[peer_id] = nullptr;
     } else {
         is_backup_master_online_ = true;
@@ -244,32 +282,36 @@ void MasterService::onConnectionTerminated(const std::string peer_id) {
         }
     }
     current_tasks.erase(peer_id);
-
-    if (score_matrix_history_tasks_.find(peer_id) !=
-        score_matrix_history_tasks_.end()) {
-        auto& history_tasks = score_matrix_history_tasks_[peer_id];
-        for (int i = history_tasks.size() - 1; i >= 0; i--) {
-            task_queue_.push_front(history_tasks[i]);
-            CROW_LOG_INFO << "put back " << history_tasks[i]->getShortName()
-                          << "into taskqueue";
+    for (int k = 0; k < sequence_row_.size(); k++) {
+        if (score_matrix_history_tasks_[k].find(peer_id) !=
+            score_matrix_history_tasks_[k].end()) {
+            auto& history_tasks = score_matrix_history_tasks_[k][peer_id];
+            for (int i = history_tasks.size() - 1; i >= 0; i--) {
+                task_queue_.push_front(history_tasks[i]);
+                CROW_LOG_INFO << "put back " << history_tasks[i]->getShortName()
+                              << "into taskqueue";
+            }
+            score_matrix_history_tasks_[k].erase(peer_id);
         }
-        score_matrix_history_tasks_.erase(peer_id);
-    }
-    // wipe out records in score_matrix_task_peer_id_
-    for (int i = 0; i < score_matrix_task_peer_id_.size(); i++) {
-        for (int j = 0; j < score_matrix_task_peer_id_[i].size(); j++) {
-            if (score_matrix_task_peer_id_[i][j] == peer_id) {
-                score_matrix_task_peer_id_[i][j] = "";
+        // wipe out records in score_matrix_task_peer_id_
+        for (int i = 0; i < score_matrix_task_peer_id_[k].size(); i++) {
+            for (int j = 0; j < score_matrix_task_peer_id_[k][i].size(); j++) {
+                if (score_matrix_task_peer_id_[k][i][j] == peer_id) {
+                    score_matrix_task_peer_id_[k][i][j] = "#pending";
+                }
             }
         }
     }
+
     // trigger resending tasks
     assignTasks();
 }
 
-shared_ptr<ScoreMatrixTask> MasterService::generateScoreMatrixTask(int x,
+shared_ptr<ScoreMatrixTask> MasterService::generateScoreMatrixTask(int row_id,
+                                                                   int x,
                                                                    int y) {
     shared_ptr<ScoreMatrixTask> task = make_shared<ScoreMatrixTask>();
+    task->row_id_ = row_id;
     task->x_ = x;
     task->y_ = y;
     task->match_score_ = match_score_;
@@ -277,64 +319,67 @@ shared_ptr<ScoreMatrixTask> MasterService::generateScoreMatrixTask(int x,
     // task->gap_extra_ = gap_extra_;
     task->gap_open_ = gap_open_;
     // get the sequence
-    task->sequence_row_ =
-        sequence_row_.substr(y * column_block_size_,
-                             min(sequence_row_.size() - y * column_block_size_,
-                                 size_t(column_block_size_)));
+    task->sequence_row_ = sequence_row_[row_id].substr(
+        y * column_block_size_,
+        min(sequence_row_[row_id].size() - y * column_block_size_,
+            size_t(column_block_size_)));
 
     task->sequence_column_ = sequence_column_.substr(
         x * row_block_size_, min(sequence_column_.size() - x * row_block_size_,
                                  size_t(row_block_size_)));
     // get the column on the top
     if (x != 0) {
-        task->top_row_ = score_matrix_task_blocks_[x - 1][y]->bottom_row_;
+        task->top_row_ =
+            score_matrix_task_blocks_[row_id][x - 1][y]->bottom_row_;
     } else {
         task->top_row_ = vector<int>(task->sequence_row_.size(), 0);
     }
     // get the row on its left
     if (y != 0) {
-        task->left_column_ = score_matrix_task_blocks_[x][y - 1]->right_column_;
+        task->left_column_ =
+            score_matrix_task_blocks_[row_id][x][y - 1]->right_column_;
     } else {
         task->left_column_ = vector<int>(task->sequence_column_.size(), 0);
     }
     // get the number on its left-top
     if (x != 0 && y != 0) {
-        task->left_top_element_ =
-            *(score_matrix_task_blocks_[x - 1][y - 1]->bottom_row_.end() - 1);
+        task->left_top_element_ = *(
+            score_matrix_task_blocks_[row_id][x - 1][y - 1]->bottom_row_.end() -
+            1);
     } else {
         task->left_top_element_ = 0;
     }
     return task;
 }
 
-bool MasterService::checkDependencyForScoreMatrix(int x, int y) {
-    if (x >= score_matrix_task_blocks_.size() ||
-        y >= score_matrix_task_blocks_[0].size()) {
+bool MasterService::checkDependencyForScoreMatrix(int row_id, int x, int y) {
+    if (x >= score_matrix_task_blocks_[row_id].size() ||
+        y >= score_matrix_task_blocks_[row_id][0].size()) {
         return false;
     }
     if (x == 0 && y == 0) {
         return true;
     } else if (x == 0) {
-        if (score_matrix_task_blocks_[x][y - 1] != nullptr &&
-            score_matrix_task_peer_id_[x][y - 1] != "") {
+        if (score_matrix_task_blocks_[row_id][x][y - 1] != nullptr &&
+            score_matrix_task_peer_id_[row_id][x][y - 1] != "") {
             return true;
         }
         return false;
     } else if (y == 0) {
-        if (score_matrix_task_blocks_[x - 1][y] != nullptr &&
-            score_matrix_task_peer_id_[x - 1][y] != "") {
+        if (score_matrix_task_blocks_[row_id][x - 1][y] != nullptr &&
+            score_matrix_task_peer_id_[row_id][x - 1][y] != "") {
             return true;
         }
         return false;
     } else {
-        if (score_matrix_task_blocks_[x][y - 1] == nullptr ||
-            score_matrix_task_blocks_[x - 1][y] == nullptr ||
-            score_matrix_task_peer_id_[x][y - 1] == "" ||
-            score_matrix_task_peer_id_[x - 1][y] == "") {
+        if (score_matrix_task_blocks_[row_id][x][y - 1] == nullptr ||
+            score_matrix_task_blocks_[row_id][x - 1][y] == nullptr ||
+            score_matrix_task_peer_id_[row_id][x][y - 1] == "" ||
+            score_matrix_task_peer_id_[row_id][x - 1][y] == "") {
             return false;
         }
-        if (score_matrix_task_blocks_[x - 1][y - 1] == nullptr ||
-            score_matrix_task_peer_id_[x - 1][y - 1] == "") {
+        if (score_matrix_task_blocks_[row_id][x - 1][y - 1] == nullptr ||
+            score_matrix_task_peer_id_[row_id][x - 1][y - 1] == "") {
             return false;
         }
         return true;
@@ -343,7 +388,6 @@ bool MasterService::checkDependencyForScoreMatrix(int x, int y) {
 void MasterService::assignTasks() {
     while (!task_queue_.empty()) {
         auto task = task_queue_.front();
-        cout << "here300 " << (task == nullptr) << endl;
         auto score_task = dynamic_pointer_cast<ScoreMatrixTask>(task);
         string idle_peer = "";
 
@@ -358,8 +402,8 @@ void MasterService::assignTasks() {
             if (idle_peer != "") {
                 // this is an idle node
                 // record that we sent this matrix task to this slave
-                score_matrix_task_peer_id_[score_task->x_][score_task->y_] =
-                    idle_peer;
+                score_matrix_task_peer_id_[score_task->row_id_][score_task->x_]
+                                          [score_task->y_] = idle_peer;
                 task_queue_.pop_front();
                 if (is_master_ && is_backup_master_online_) {
                     CROW_LOG_INFO << "send sync message to backup master";
@@ -383,7 +427,8 @@ void MasterService::assignTasks() {
 
             int x = traceback_task->x_;
             int y = traceback_task->y_;
-            string peer_id = score_matrix_task_peer_id_[x][y];
+            string peer_id =
+                score_matrix_task_peer_id_[traceback_task->row_id_][x][y];
             if (peer_id == "") {
                 CROW_LOG_WARNING << "trying to assign trace back task " << x
                                  << "," << y
@@ -424,20 +469,23 @@ void MasterService::assignTasks() {
 void MasterService::sendTaskToNode(std::string peer_id,
                                    shared_ptr<AbstractTask> task) {
     current_tasks[peer_id] = task;
-    CROW_LOG_INFO << "sending  " << task->getShortName() << " to " << peer_id;
+    CROW_LOG_INFO << "sending  " << task->getShortName() << " to " << peer_id
+                  << ": " << task->toJson();
     thread([task, peer_id, this]() {
         string message = task->toJson();
         sendMessageToPeer(peer_id, message);
     }).detach();
 }
 
-shared_ptr<TracebackTask> MasterService::genearteTracebackTask(int prev_pos_x,
+shared_ptr<TracebackTask> MasterService::genearteTracebackTask(int row_id,
+                                                               int prev_pos_x,
                                                                int prev_pos_y) {
     auto task = make_shared<TracebackTask>();
     task->x_ = prev_pos_x / row_block_size_;
     task->y_ = prev_pos_y / column_block_size_;
     task->start_x_ = prev_pos_x % row_block_size_;
     task->start_y_ = prev_pos_y % column_block_size_;
+    task->row_id_ = row_id;
     return task;
 }
 void MasterService::getSequence(string data_type, string data_source,
