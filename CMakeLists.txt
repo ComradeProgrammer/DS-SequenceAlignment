@@ -15,6 +15,8 @@ include_directories(third_party/Crow/include)
 include_directories(third_party/websocketpp)
 # headers from single_include (headers-only version)
 include_directories(third_party/json/single_include)
+include_directories(third_party/asio)
+include_directories(third_party/boost)
 
 
 # for apple macos, add the brew's include path into include path
