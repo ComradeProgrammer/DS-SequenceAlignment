@@ -1,6 +1,6 @@
 #include <iostream>
 #include <thread>
-
+#include"crow/logging.h"
 #include "controller/slave_controller.h"
 #include "gflags/gflags.h"
 using namespace std;
@@ -15,6 +15,7 @@ DEFINE_string(backup_master_uri, "",
 int main(int argc, char **argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     SlaveController controller;
+    crow::logger::setLogLevel(crow::LogLevel::WARNING);
     controller.setID(FLAGS_node_id);
     controller.setMasterUri(FLAGS_master_uri);
     controller.setBackupMasterUri(FLAGS_backup_master_uri);

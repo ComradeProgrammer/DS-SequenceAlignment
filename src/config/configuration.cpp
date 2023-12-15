@@ -12,10 +12,7 @@ using nlohmann::json;
 bool Configuration::loadFromFile(string file_path) {
     ifstream config_file;
     config_file.open(file_path, ios::in);
-    if (!config_file.is_open()) {
-        CROW_LOG_ERROR << "failed to read file: " << file_path;
-        return false;
-    }
+    
 
     json j;
     try {

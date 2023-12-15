@@ -35,6 +35,8 @@ file(GLOB TESTS "test/*.cpp"  "test/**/*.cpp")
 add_executable(master ${SOURCES} src/master.cpp)
 add_executable(slave ${SOURCES} src/slave.cpp)
 add_executable(bmaster ${SOURCES} src/bmaster.cpp)
+add_executable(seq ${SOURCES} src/sequential.cpp)
+
 
 target_link_libraries(master gflags::gflags)
 target_link_libraries(slave gflags::gflags)

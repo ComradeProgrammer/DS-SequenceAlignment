@@ -20,7 +20,7 @@ void MasterService::onInit() {
         mismatch_pentalty_ = config_->mismatch_penalty_;
         gap_open_ = config_->gap_open_;
         init_wait_ = config_->master_wait_time;
-        
+
         for (int i = 0; i < config_->row_sequences.size(); i++) {
             string sequence_row;
             getSequence(config_->row_sequences[i].sequence_row_type_,
@@ -103,6 +103,7 @@ void MasterService::onInit() {
     thread([this]() {
         std::this_thread::sleep_for(
             std::chrono::milliseconds(1000 * init_wait_));
+        start_time_ = getTimestamp();
         lock_.unlock();
     }).detach();
 }
@@ -224,8 +225,11 @@ void MasterService::onTracebackTaskResponse(
     // check whether trace back should stop
     if (response->halt_ || !(next_step_x >= 0 && next_step_y >= 0)) {
         // weh should stop now. we got the result
+        end_time_ = getTimestamp();
+
         cout << "Result got for sequence " << row_id << endl;
         cout << result_[row_id] << endl;
+        cout << "Time: " << (end_time_ - start_time_) << endl;
         // clear the task of peer
         current_tasks[peer_id] = nullptr;
         // trigger resending tasks
@@ -498,9 +502,6 @@ void MasterService::getSequence(string data_type, string data_source,
         ifstream f(data_source, ios::in);
         ss << f.rdbuf();
         out_res = ss.str();
-        if (f.is_open()) {
-            CROW_LOG_ERROR << "failed to read file " << data_source;
-        }
         // remove the space
         out_res.erase(0, out_res.find_first_not_of(" \r\n\t\v\f"));
         out_res.erase(out_res.find_last_not_of(" \r\n\t\v\f") + 1);

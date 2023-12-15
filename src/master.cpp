@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     auto config = std::make_shared<Configuration>();
     config->loadFromFile(FLAGS_config);
-
+    crow::logger::setLogLevel(crow::LogLevel::WARNING);
     MasterController controller;
     controller.onInit(config, FLAGS_backup);
     controller.run(FLAGS_port);

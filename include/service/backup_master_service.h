@@ -1,5 +1,7 @@
 #ifndef __BACKUP_MASTER_SERVICE_H__
 #define __BACKUP_MASTER_SERVICE_H__
+#include <mutex>
+
 #include "model/StateSyncObject.hpp"
 #include "service/abstract_service.h"
 #include "service/master_service.h"

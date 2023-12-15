@@ -1,5 +1,7 @@
 #ifndef __MASTER_SERVICE_H__
 #define __MASTER_SERVICE_H__
+#include <sys/time.h>
+#include <mutex>
 #include <deque>
 #include <memory>
 
@@ -22,7 +24,7 @@ class MasterService : public AbstractService {
     virtual void setConfiguration(std::shared_ptr<Configuration> config) {
         config_ = config;
     }
-    virtual void setBackupMasterOnline(bool v){is_backup_master_online_=v;}
+    virtual void setBackupMasterOnline(bool v) { is_backup_master_online_ = v; }
 
    protected:
     std::shared_ptr<Configuration> config_;
@@ -78,6 +80,9 @@ class MasterService : public AbstractService {
 
     std::deque<std::shared_ptr<StateSyncObject>> to_back_master_queue_;
 
+    long long start_time_;
+    long long end_time_;
+
    protected:
     virtual void onScoreMatrixTaskResponse(
         std::string peer_id, std::shared_ptr<ScoreMatrixTaskResponse> response);
@@ -113,6 +118,12 @@ class MasterService : public AbstractService {
 
     virtual void getSequence(std::string data_type, std::string data_source,
                              std::string& out_res);
+
+    int getTimestamp() {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    }
 };
 
 #endif

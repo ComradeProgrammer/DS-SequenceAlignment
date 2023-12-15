@@ -1,9 +1,10 @@
 #ifndef __CONFIGURATION_H__
 #define __CONFIGURATION_H__
 #include <string>
+#include <vector>
 class Sequence {
    public:
-        // "sequenceRowDataSource", required
+    // "sequenceRowDataSource", required
     // if "sequenceRowType" is fasta, then this is the location of fasta file
     // if "sequenceRowType" is text, then this is the location of text file
     // containing the sequence
