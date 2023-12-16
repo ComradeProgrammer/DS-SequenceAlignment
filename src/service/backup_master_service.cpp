@@ -26,12 +26,6 @@ void BackupMasterService::onInit() {
         getSequence(config_->sequence_column_type_,
                     config_->sequence_column_data_source_, sequence_column_);
         // Print the current config param for good
-        CROW_LOG_INFO << "column_block_size: " << column_block_size_;
-        CROW_LOG_INFO << "row_block_size: " << row_block_size_;
-        CROW_LOG_INFO << "match_score: " << match_score_;
-        CROW_LOG_INFO << "mismatch_pentalty: " << mismatch_pentalty_;
-        CROW_LOG_INFO << "gap_open: " << gap_open_;
-        CROW_LOG_INFO << "init_wait: " << init_wait_;
         for (int i = 0; i < sequence_row_.size(); i++) {
             CROW_LOG_INFO << "sequence_row[" << i << "]: " << sequence_row_[i];
         }

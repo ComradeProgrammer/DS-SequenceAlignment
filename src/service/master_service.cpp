@@ -31,16 +31,8 @@ void MasterService::onInit() {
         getSequence(config_->sequence_column_type_,
                     config_->sequence_column_data_source_, sequence_column_);
         // Print the current config param for good
-        CROW_LOG_INFO << "column_block_size: " << column_block_size_;
-        CROW_LOG_INFO << "row_block_size: " << row_block_size_;
-        CROW_LOG_INFO << "match_score: " << match_score_;
-        CROW_LOG_INFO << "mismatch_pentalty: " << mismatch_pentalty_;
-        CROW_LOG_INFO << "gap_open: " << gap_open_;
-        CROW_LOG_INFO << "init_wait: " << init_wait_;
         for (int i = 0; i < sequence_row_.size(); i++) {
-            CROW_LOG_INFO << "sequence_row[" << i << "]: " << sequence_row_[i];
         }
-        CROW_LOG_INFO << "sequence_column: " << sequence_column_;
     }
 
     max_score_ = vector<int>(sequence_row_.size(), -1);
@@ -77,7 +69,6 @@ void MasterService::onInit() {
         // init the task queue with the first task
         auto task = generateScoreMatrixTask(j, 0, 0);
         task_queue_.push_back(task);
-        CROW_LOG_INFO << "add task " << task->getShortName() << " into queue";
     }
     // this thread is for syncing messages to the backup master
     if (is_master_ && is_backup_master_online_) {
@@ -90,8 +81,6 @@ void MasterService::onInit() {
                         auto obj = to_back_master_queue_.front();
                         to_back_master_queue_.pop_front();
                         string message = obj->toJson();
-                        CROW_LOG_INFO << "send message to backup_master"
-                                      << message;
                         sendMessageToPeer(BACKUP_MASTER_ID, message);
                     }
                 }
@@ -116,7 +105,6 @@ void MasterService::onNewMessage(std::string peer_id,
     try {
         j = json::parse(message);
     } catch (const json::exception& e) {
-        CROW_LOG_ERROR << "failed to parse: " << e.what();
         return;
     }
     string object_type = j["type"].template get<string>();
@@ -162,17 +150,16 @@ void MasterService::onScoreMatrixTaskResponse(
         y == score_matrix_task_blocks_[row_id][0].size() - 1) {
         // all the blocks have been calculated
         // starting the first traceback task
+        cout<<"Score Matrix "<<getTimestamp()-start_time_<<endl;
         auto new_task = genearteTracebackTask(row_id, max_score_x_[row_id],
                                               max_score_y_[row_id]);
         task_queue_.push_back(new_task);
         if (is_master_ && is_backup_master_online_) {
-            CROW_LOG_INFO << "send sync message to backup master";
             shared_ptr<StateSyncObject> ptr = make_shared<StateSyncObject>();
             ptr->task_ = new_task;
             ptr->sync_type_ = "queuePushBack";
             to_back_master_queue_.push_back(ptr);
         }
-        CROW_LOG_INFO << "add " << new_task->getShortName() << " into queue";
     } else {
         // update tasks queue
         if (checkDependencyForScoreMatrix(row_id, x, y + 1) &&
@@ -182,15 +169,12 @@ void MasterService::onScoreMatrixTaskResponse(
             task_queue_.push_back(new_task);
 
             if (is_master_ && is_backup_master_online_) {
-                CROW_LOG_INFO << "send sync message to backup master";
                 shared_ptr<StateSyncObject> ptr =
                     make_shared<StateSyncObject>();
                 ptr->task_ = new_task;
                 ptr->sync_type_ = "queuePushBack";
                 to_back_master_queue_.push_back(ptr);
             }
-            CROW_LOG_INFO << "add score matrix task "
-                          << new_task->getShortName() << "into queue";
         }
 
         if (checkDependencyForScoreMatrix(row_id, x + 1, y) &&
@@ -200,15 +184,13 @@ void MasterService::onScoreMatrixTaskResponse(
             auto new_task = generateScoreMatrixTask(row_id, x + 1, y);
             task_queue_.push_back(new_task);
             if (is_master_ && is_backup_master_online_) {
-                CROW_LOG_INFO << "send sync message to backup master";
                 shared_ptr<StateSyncObject> ptr =
                     make_shared<StateSyncObject>();
                 ptr->task_ = new_task;
                 ptr->sync_type_ = "queuePushBack";
                 to_back_master_queue_.push_back(ptr);
             }
-            CROW_LOG_INFO << "add score matrix task "
-                          << new_task->getShortName() << "into queue";
+           
         }
     }
     // trigger resending tasks
@@ -241,7 +223,6 @@ void MasterService::onTracebackTaskResponse(
 
     auto new_task = genearteTracebackTask(row_id, next_step_x, next_step_y);
     if (is_master_ && is_backup_master_online_) {
-        CROW_LOG_INFO << "send sync message to backup master";
         shared_ptr<StateSyncObject> ptr = make_shared<StateSyncObject>();
         ptr->task_ = new_task;
         ptr->sync_type_ = "queuePushBack";
@@ -254,7 +235,6 @@ void MasterService::onTracebackTaskResponse(
 }
 void MasterService::onConnectionEstablished(const std::string peer_id) {
     lock_guard<mutex> lock_block(lock_);
-    CROW_LOG_INFO << "peer " << peer_id << " connected";
     if (peer_id != BACKUP_MASTER_ID) {
         for (int i = 0; i < sequence_row_.size(); i++) {
             score_matrix_history_tasks_[i][peer_id] = {};
@@ -269,7 +249,6 @@ void MasterService::onConnectionEstablished(const std::string peer_id) {
 
 void MasterService::onConnectionTerminated(const std::string peer_id) {
     lock_guard<mutex> lock_block(lock_);
-    CROW_LOG_INFO << "peer " << peer_id << " disconnected";
     if (peer_id == BACKUP_MASTER_ID) {
         // if the backup master is down, we just do nothing
         return;
@@ -281,8 +260,7 @@ void MasterService::onConnectionTerminated(const std::string peer_id) {
         auto task = current_tasks[peer_id];
         if (task != nullptr) {
             task_queue_.push_front(task);
-            CROW_LOG_INFO << "put back " << task->getShortName()
-                          << "into taskqueue";
+        
         }
     }
     current_tasks.erase(peer_id);
@@ -292,8 +270,7 @@ void MasterService::onConnectionTerminated(const std::string peer_id) {
             auto& history_tasks = score_matrix_history_tasks_[k][peer_id];
             for (int i = history_tasks.size() - 1; i >= 0; i--) {
                 task_queue_.push_front(history_tasks[i]);
-                CROW_LOG_INFO << "put back " << history_tasks[i]->getShortName()
-                              << "into taskqueue";
+               
             }
             score_matrix_history_tasks_[k].erase(peer_id);
         }
@@ -410,7 +387,7 @@ void MasterService::assignTasks() {
                                           [score_task->y_] = idle_peer;
                 task_queue_.pop_front();
                 if (is_master_ && is_backup_master_online_) {
-                    CROW_LOG_INFO << "send sync message to backup master";
+                 
                     shared_ptr<StateSyncObject> ptr =
                         make_shared<StateSyncObject>();
                     ptr->task_ = task;
@@ -450,7 +427,7 @@ void MasterService::assignTasks() {
             if (current_tasks[peer_id] == nullptr) {
                 task_queue_.pop_front();
                 if (is_master_ && is_backup_master_online_) {
-                    CROW_LOG_INFO << "send sync message to backup master";
+                 
                     shared_ptr<StateSyncObject> ptr =
                         make_shared<StateSyncObject>();
                     ptr->task_ = task;
@@ -473,8 +450,7 @@ void MasterService::assignTasks() {
 void MasterService::sendTaskToNode(std::string peer_id,
                                    shared_ptr<AbstractTask> task) {
     current_tasks[peer_id] = task;
-    CROW_LOG_INFO << "sending  " << task->getShortName() << " to " << peer_id
-                  << ": " << task->toJson();
+
     thread([task, peer_id, this]() {
         string message = task->toJson();
         sendMessageToPeer(peer_id, message);

@@ -29,18 +29,16 @@ void MasterController::onInit(std::shared_ptr<Configuration> config,
 }
 
 void MasterController::onOpen(crow::websocket::connection& conn) {
-    CROW_LOG_INFO << "new websocket connection from " << conn.get_remote_ip();
+  
     // do nothing, we need to wait for IdentificationInfo packet
 }
 
 void MasterController::onClose(crow::websocket::connection& conn) {
     // check whether this connection has IdentificationInfo attached
     if (conn.userdata() == nullptr) {
-        CROW_LOG_INFO << "new websocket disconnected with unknown identity";
     } else {
         auto tmp = static_cast<IdentificationInfo*>(conn.userdata());
         conn.userdata(nullptr);
-        CROW_LOG_INFO << "new websocket disconnected from " << tmp->getPeerID();
 
         lock_.lock();
         id_to_connections.erase(tmp->getPeerID());
@@ -55,7 +53,6 @@ void MasterController::onMessage(crow::websocket::connection& conn,
                                  const std::string& data, bool is_binary) {
     // first we need to check whether it is an IdentificationInfo json object
     if (!is_binary) {
-        CROW_LOG_INFO << "new text message " << data;
         json j;
         bool parse_ok = true;
         try {
@@ -92,8 +89,6 @@ void MasterController::onMessage(crow::websocket::connection& conn,
                 << "some connection without identification is sending message";
         }
     } else {
-        CROW_LOG_INFO << "new data message "
-                      << charArrayToString(data.c_str(), data.size());
         auto tmp = static_cast<IdentificationInfo*>(conn.userdata());
         // forward this message to the service layer
         if (tmp != nullptr) {

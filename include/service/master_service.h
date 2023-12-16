@@ -1,6 +1,5 @@
 #ifndef __MASTER_SERVICE_H__
 #define __MASTER_SERVICE_H__
-#include <sys/time.h>
 #include <mutex>
 #include <deque>
 #include <memory>
@@ -119,11 +118,7 @@ class MasterService : public AbstractService {
     virtual void getSequence(std::string data_type, std::string data_source,
                              std::string& out_res);
 
-    int getTimestamp() {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-    }
+    
 };
 
 #endif

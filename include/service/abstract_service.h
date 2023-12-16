@@ -2,6 +2,8 @@
 #define __ABSTRACT_SERVICE_H__
 #include <cstdlib>
 #include <string>
+#include <sys/time.h>
+
 class AbstractController;
 class AbstractService {
    public:
@@ -53,6 +55,11 @@ class AbstractService {
 
    protected:
     AbstractController* controller_;
+    time_t getTimestamp() {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    }
 };
 
 #endif

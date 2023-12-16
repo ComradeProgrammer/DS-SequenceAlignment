@@ -7,7 +7,6 @@ void SlaveService::onInit() {}
 
 void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
                                 bool is_binary) {
-    CROW_LOG_INFO << "new message from " << peer_id << ",: " << message;
     // first parse the message and try to identify the type
     json j;
     try {
@@ -18,7 +17,7 @@ void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
     }
     string object_type = j["type"].template get<string>();
     lock_guard<mutex> lock_block(lock_);
-    //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     if (object_type == "ScoreMatrixTask") {
         auto task = make_shared<ScoreMatrixTask>();
         task->loadFromJsonObject(j);
@@ -31,7 +30,6 @@ void SlaveService::onNewMessage(std::string peer_id, const std::string& message,
 }
 
 void SlaveService::onConnectionEstablished(const std::string peer_id) {
-    CROW_LOG_INFO << "connection established with " << peer_id;
     lock_guard<mutex> lock_block(lock_);
     if (peer_id == MASTER_ID) {
         master_online_ = true;
@@ -41,8 +39,6 @@ void SlaveService::onConnectionEstablished(const std::string peer_id) {
 }
 
 void SlaveService::onConnectionTerminated(const std::string peer_id) {
-    CROW_LOG_INFO << "connection terminated with " << peer_id;
-
     lock_guard<mutex> lock_block(lock_);
     if (peer_id == MASTER_ID) {
         master_online_ = false;
@@ -53,10 +49,13 @@ void SlaveService::onConnectionTerminated(const std::string peer_id) {
 
 shared_ptr<ScoreMatrixTaskResponse> SlaveService::onScoreMatrixTask(
     std::shared_ptr<ScoreMatrixTask> task) {
+    long long t1 = getTimestamp();
+
     int row_id = task->row_id_;
     auto block = calculateScoreMatrixBlock(task);
     string key = to_string(task->x_) + "_" + to_string(task->y_);
     score_matrix_blocks_[row_id][key] = block;
+    long long t2 = getTimestamp();
 
     // generate the result
     auto response = make_shared<ScoreMatrixTaskResponse>();
@@ -78,7 +77,8 @@ shared_ptr<ScoreMatrixTaskResponse> SlaveService::onScoreMatrixTask(
         response->right_column_.push_back(
             block->score_matrix_[i][y_size - 1].first);
     }
-
+    total += (t2 - t1);
+     cout << total << endl;
     sendResultBack(response);
     return response;
 }
@@ -117,34 +117,49 @@ shared_ptr<ScoreMatrixBlock> SlaveService::calculateScoreMatrixBlock(
     res->task_ = task;
     int x_size = task->sequence_column_.size();
     int y_size = task->sequence_row_.size();
+    auto& matrix = res->score_matrix_;
+    auto& left_column = res->task_->left_column_;
+    auto& top_row = res->task_->top_row_;
+    int lt_element = res->task_->left_top_element_;
+    int max_score = -1;
+    int max_score_x, max_score_y;
+    matrix = vector<vector<pair<int, int>>>(
+        x_size, vector<pair<int, int>>(y_size, {0, 0}));
     for (int i = 0; i < x_size; i++) {
-        res->score_matrix_.push_back(vector<pair<int, int>>(y_size, {0, 0}));
         for (int j = 0; j < y_size; j++) {
-            int diag = getScore(i - 1, j - 1, res) +
+            int diag = getScore(i - 1, j - 1, matrix, left_column, top_row,
+                                lt_element) +
                        (task->sequence_column_[i] == task->sequence_row_[j]
                             ? task->match_score_
                             : task->mismatch_pentalty_);
-            int top = getScore(i - 1, j, res) + task->gap_open_;
-            int left = getScore(i, j - 1, res) + task->gap_open_;
+            int top =
+                getScore(i - 1, j, matrix, left_column, top_row, lt_element) +
+                task->gap_open_;
+            int left =
+                getScore(i, j - 1, matrix, left_column, top_row, lt_element) +
+                task->gap_open_;
             int score = max(max(diag, top), max(left, 0));
-            res->score_matrix_[i][j].first = score;
+            matrix[i][j].first = score;
             if (score == diag) {
-                res->score_matrix_[i][j].second = SW_LEFTTOP;
+                matrix[i][j].second = SW_LEFTTOP;
             } else if (score == left) {
-                res->score_matrix_[i][j].second = SW_LEFT;
+                matrix[i][j].second = SW_LEFT;
             } else if (score == top) {
-                res->score_matrix_[i][j].second = SW_TOP;
+                matrix[i][j].second = SW_TOP;
             } else {
-                res->score_matrix_[i][j].second = SW_HALT;
+                matrix[i][j].second = SW_HALT;
             }
 
             if (score >= res->max_score_) {
-                res->max_score_ = score;
-                res->max_score_x_ = i;
-                res->max_score_y_ = j;
+                max_score = score;
+                max_score_x = i;
+                max_score_y = j;
             }
         }
     }
+    res->max_score_ = max_score;
+    res->max_score_x_ = max_score_x;
+    res->max_score_y_ = max_score_y;
     return res;
 }
 
@@ -189,14 +204,10 @@ LABELA:
     return res;
 }
 
-int SlaveService::getScore(int x, int y, shared_ptr<ScoreMatrixBlock> res) {
-    return getScore(x, y, res->score_matrix_, res->task_->left_column_,
-                    res->task_->top_row_, res->task_->left_top_element_);
-}
 int SlaveService::getScore(int x, int y,
                            const vector<vector<pair<int, int>>>& score_matrix,
-                           const vector<int> left_column,
-                           const vector<int> top_row, int left_top_number) {
+                           const vector<int>& left_column,
+                           const vector<int>& top_row, int left_top_number) {
     if (x >= 0 && y >= 0) {
         return score_matrix[x][y].first;
     } else if (x == -1 && y == -1) {

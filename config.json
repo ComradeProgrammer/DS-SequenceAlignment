@@ -1,7 +1,7 @@
 {
-    "masterWaitTime": 20,
-    "columnBlockSize": 10,
-    "rowBlockSize": 10,
+    "masterWaitTime": 10,
+    "columnBlockSize": 1000,
+    "rowBlockSize": 1000,
     "rowSequences": [
         {
             "sequenceRowType": "text",

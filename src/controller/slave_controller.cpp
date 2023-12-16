@@ -18,7 +18,6 @@ void SlaveController::establishConnection() {
         master_client_.init_asio();
         master_client_.set_open_handler(
             [&master_ready](websocketpp::connection_hdl hdl) {
-                CROW_LOG_INFO << "websocket connected with master";
                 master_ready = true;
             });
         master_client_.set_fail_handler([](websocketpp::connection_hdl hdl) {
@@ -66,7 +65,6 @@ void SlaveController::establishConnection() {
         backup_master_client_.init_asio();
         backup_master_client_.set_open_handler(
             [&backup_master_ready](websocketpp::connection_hdl hdl) {
-                CROW_LOG_INFO << "websocket connected with backup_master";
                 backup_master_ready = true;
             });
         backup_master_client_.set_fail_handler(
@@ -121,11 +119,8 @@ void SlaveController::onMasterMessage(
     websocketpp::config::asio_client::message_type::ptr msg) {
     std::string payload = msg->get_payload();
     if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-        CROW_LOG_INFO << "received text message from master:" << payload;
         service_->onNewMessage(MASTER_ID, payload, false);
     } else if (msg->get_opcode() == websocketpp::frame::opcode::binary) {
-        CROW_LOG_INFO << "received binary data message from master:"
-                      << charArrayToString(payload.data(), payload.size());
         service_->onNewMessage(MASTER_ID, payload, true);
     }
 }
@@ -135,30 +130,23 @@ void SlaveController::onBackupMasterMessage(
     websocketpp::config::asio_client::message_type::ptr msg) {
     std::string payload = msg->get_payload();
     if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-        CROW_LOG_INFO << "received text message from backup master:"
-                      << msg->get_payload();
         service_->onNewMessage(BACKUP_MASTER_ID, payload, false);
 
     } else if (msg->get_opcode() == websocketpp::frame::opcode::binary) {
-        CROW_LOG_INFO << "received binary data message from backup master:"
-                      << charArrayToString(payload.data(), payload.size());
         service_->onNewMessage(BACKUP_MASTER_ID, payload, true);
     }
 }
 
 void SlaveController::onMasterClose(websocketpp::connection_hdl hdl) {
-    CROW_LOG_INFO << "connection closed with master";
     service_->onConnectionTerminated(MASTER_ID);
 }
 
 void SlaveController::onBackupMasterClose(websocketpp::connection_hdl hdl) {
-    CROW_LOG_INFO << "connection closed with backup master";
     service_->onConnectionTerminated(BACKUP_MASTER_ID);
 }
 
 void SlaveController::sendMessageToPeer(const std::string& peer_id,
                                         const std::string& message) {
-    CROW_LOG_INFO << "send message to " << peer_id << ": " << message;
     try {
         if (peer_id == MASTER_ID) {
             master_client_.send(master_connection_->get_handle(), message,

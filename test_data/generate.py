@@ -1,6 +1,6 @@
 import random
 
-l = 1000
+l = 10000
 res = ""
 for i in range(0, l):
     tmp = random.randint(0, 3)

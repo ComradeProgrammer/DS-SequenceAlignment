@@ -44,12 +44,12 @@ class SlaveService : public AbstractService {
         std::shared_ptr<TracebackTask> task,
         std::shared_ptr<ScoreMatrixBlock> block);
 
-    int getScore(
+    inline int getScore(
         int x, int y,
         const std::vector<std::vector<std::pair<int, int>>>& score_matrix,
-        const std::vector<int> left_column, const std::vector<int> top_row,
+        const std::vector<int>& left_column, const std::vector<int>& top_row,
         int left_top_number);
-    int getScore(int x, int y, std::shared_ptr<ScoreMatrixBlock> res);
+    int total=0;
 };
 
 #endif
